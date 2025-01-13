@@ -42,12 +42,17 @@ def convolution_brute_force(input_image, kernel):
 
     return output_image
 
+
+import numpy as np
+from scipy.fft import fft2, ifft2
+
+import numpy as np
 from scipy.fft import fft2, ifft2
 
 def convolution_AI(input_image, kernel):
     """
     Perform 2D convolution of an input image with a kernel using the FFT method.
-    Ensures crop/overlap method (no padding on the input image or the kernel).
+    Handles zero-padding and alignment to ensure results match spatial convolution.
 
     Input Arguments:
         input_image: 2D numpy array
@@ -65,32 +70,31 @@ def convolution_AI(input_image, kernel):
         raise ValueError("Kernel must have odd dimensions. Current kernel size: "
                          f"{kernel.shape}")
 
-    # Flip the kernel for correct convolution
-    flipped_kernel = np.flip(np.flip(kernel, axis=0), axis=1)
+    # Determine the size for zero-padding (input + kernel - 1)
+    pad_height = input_height + kernel_height - 1
+    pad_width = input_width + kernel_width - 1
 
-    # Pad the flipped kernel to match the full input image size
-    padded_kernel = np.pad(
-        flipped_kernel,
-        (
-            (0, input_height - kernel_height),
-            (0, input_width - kernel_width)
-        ),
-        mode='constant'
-    )
+    # Zero-pad the input image and kernel to the same size
+    padded_image = np.pad(input_image, ((0, pad_height - input_height), (0, pad_width - input_width)))
+    padded_kernel = np.pad(kernel, ((0, pad_height - kernel_height), (0, pad_width - kernel_width)))
 
-    # Perform FFT on the input image and padded kernel
-    fft_image = fft2(input_image)
+    # Perform FFT on the padded image and kernel
+    fft_image = fft2(padded_image)
     fft_kernel = fft2(padded_kernel)
 
-    # Element-wise multiplication in the frequency domain
+    # Multiply in the frequency domain
     fft_result = fft_image * fft_kernel
 
-    # Perform the inverse FFT to return to the spatial domain
+    # Inverse FFT to get back to the spatial domain
     convolved_image = np.real(ifft2(fft_result))
 
-    # Compute dimensions of the valid output region
-    output_height = input_height - kernel_height + 1
-    output_width = input_width - kernel_width + 1
+    # Compute valid region dimensions
+    valid_height = input_height - kernel_height + 1
+    valid_width = input_width - kernel_width + 1
+    start_row = kernel_height - 1
+    start_col = kernel_width - 1
 
-    # Return the valid region of the convolution
-    return convolved_image[:output_height, :output_width]
+    # Extract the valid region from the convolved image
+    output_image = convolved_image[start_row:start_row + valid_height, start_col:start_col + valid_width]
+
+    return output_image
