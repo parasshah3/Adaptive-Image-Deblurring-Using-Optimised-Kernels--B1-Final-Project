@@ -1,41 +1,44 @@
-#B1 Final Project- Adaptive Deblurring Using Optimised Kernels
-#Paras Shah
+# B1 Final Project - Adaptive Deblurring Using Optimised Kernels
+# Paras Shah
 
 import numpy as np
 
-def convolution_brute_force(input_image,kernel):
+def convolution_brute_force(input_image, kernel):
     """
-    This function performs convolution of the input image with the kernel using the brute force method.
+    Perform convolution of the input image with the kernel using the brute force method.
 
-    
     Input Arguments:
-    input_image: 2D numpy array
-    kernel: 2D numpy array
-    
+        input_image: 2D numpy array
+        kernel: 2D numpy array
+
     Returns:
-    output_image: 2D numpy array
+        output_image: 2D numpy array
 
-    Crop/overlap method (No padding used)
+    Crop/overlap method (No padding used).
     """
-    #Find input image size (n x n)
-    input_image_size = input_image.shape
+    # Check if the kernel dimensions are odd-sized
+    if kernel.shape[0] % 2 == 0 or kernel.shape[1] % 2 == 0:
+        raise ValueError("Kernel must have odd dimensions. Current kernel size: "
+                         f"{kernel.shape}")
 
-    #Find kernel size (m x m)
+    # Get dimensions of the input image and kernel
+    input_image_size = input_image.shape
     kernel_size = kernel.shape
 
-    #Initalise output image array of size; (n-m+1) x (n-m+1)
-    output_image = np.zeros((input_image_size[0]-kernel_size[0]+1,input_image_size[1]-kernel_size[1]+1))
-    print(f"Output Image Size: {output_image.shape}")
+    # Flip the kernel in both directions
+    flipped_kernel = np.flip(np.flip(kernel, axis=0), axis=1)
+
+    # Initialise output image array of size (n-m+1) x (n-m+1)
+    output_image = np.zeros((input_image_size[0] - kernel_size[0] + 1,
+                             input_image_size[1] - kernel_size[1] + 1))
     
-    #Iterate over the input image applying the kernel to every pixel
+    # Iterate over the input image applying the kernel to every region
     for i in range(output_image.shape[0]):
         for j in range(output_image.shape[1]):
-
-            #Consider the region of the input image of size m x m (kernel size)
+            # Extract the region of the input image of size equal to the kernel
             region = input_image[i:i + kernel_size[0], j:j + kernel_size[1]]
-
-            #Apply the kernel to the region via element-wise multiplication and sum the results
-            output_image[i,j] = np.sum(region * kernel)
-            print(f"Output Image Value at ({i},{j}): {output_image[i,j]}")
+            
+            # Apply the flipped kernel to the region via element-wise multiplication and sum the results
+            output_image[i, j] = np.sum(region * flipped_kernel)
 
     return output_image
