@@ -1,86 +1,95 @@
-# Comparing convolution functions
-# Paras Shah - B1 Final Project: Adaptive Deblurring Using Optimised Kernels
+# B1 Final Project: Adaptive Deblurring Using Optimised Kernels
+# Paras Shah
 
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.signal import convolve2d
-from adaptive_deblurring_functions import convolution_brute_force, convolution_AI  # Import both functions
+from adaptive_deblurring_functions import convolution_brute_force, convolution_AI, load_image
 
-def test_convolution_methods():
+
+def visualize_convolution_results(original, brute_force, fft_result, convolve2d_result, kernel_description):
     """
-    Test the convolution_brute_force and convolution_AI functions with various test cases
-    using convolve2d for verification.
+    Visualize the original image and convolution results using matplotlib.
+    Args:
+        original: Original image as a 2D numpy array.
+        brute_force: Convolution result from the brute-force method.
+        fft_result: Convolution result from the FFT-based method.
+        convolve2d_result: Convolution result from scipy's convolve2d.
+        kernel_description: Description of the kernel filter being used.
+
+    Returns:
+        None
     """
-    print("\n===== Running Tests for Brute-Force and FFT-Based Convolution with convolve2d Verification =====\n")
+    plt.figure(figsize=(16, 8))
+    plt.suptitle(f"Convolution Results Using {kernel_description}", fontsize=16, fontweight="bold")
 
-    # Test Case 1: Simple 5x5 input and 3x3 kernel
-    input_image_1 = np.array([[1, 2, 3, 4, 5],
-                              [6, 7, 8, 9, 10],
-                              [11, 12, 13, 14, 15],
-                              [16, 17, 18, 19, 20],
-                              [21, 22, 23, 24, 25]])
-    kernel_1 = np.array([[1, 0, -1],
-                         [1, 0, -1],
-                         [1, 0, -1]])
-    # Expected output using convolve2d
-    expected_output_1 = convolve2d(input_image_1, kernel_1, mode='valid')
-    # Outputs from both methods
-    output_brute_1 = convolution_brute_force(input_image_1, kernel_1)
-    output_ai_1 = convolution_AI(input_image_1, kernel_1)
-    print("Test Case 1: Simple 5x5 input and 3x3 kernel")
-    print("Expected Output:\n", expected_output_1)
-    print("Brute-Force Output:\n", output_brute_1)
-    print("FFT-Based Output:\n", output_ai_1)
-    print("Brute-Force Pass:", np.allclose(output_brute_1, expected_output_1))
-    print("FFT-Based Pass:", np.allclose(output_ai_1, expected_output_1))
+    # Original image
+    plt.subplot(1, 4, 1)
+    plt.title("Original Image")
+    plt.imshow(original, cmap="gray")
+    plt.axis("off")
 
-    # Test Case 2: Gaussian-like kernel (3x3)
-    input_image_2 = np.array([[10, 20, 30, 40],
-                              [50, 60, 70, 80],
-                              [90, 100, 110, 120],
-                              [130, 140, 150, 160]])
-    kernel_2 = np.array([[1, 2, 1],
-                         [2, 4, 2],
-                         [1, 2, 1]])
-    expected_output_2 = convolve2d(input_image_2, kernel_2, mode='valid')
-    output_brute_2 = convolution_brute_force(input_image_2, kernel_2)
-    output_ai_2 = convolution_AI(input_image_2, kernel_2)
-    print("\nTest Case 2: Gaussian-like kernel")
-    print("Expected Output:\n", expected_output_2)
-    print("Brute-Force Output:\n", output_brute_2)
-    print("FFT-Based Output:\n", output_ai_2)
-    print("Brute-Force Pass:", np.allclose(output_brute_2, expected_output_2))
-    print("FFT-Based Pass:", np.allclose(output_ai_2, expected_output_2))
+    # Brute-force result
+    plt.subplot(1, 4, 2)
+    plt.title("Brute-Force Convolution")
+    plt.imshow(brute_force, cmap="gray")
+    plt.axis("off")
 
-    # Test Case 3: Edge case with all zeros (7x7 input and 3x3 kernel)
-    input_image_3 = np.zeros((7, 7))
-    kernel_3 = np.array([[1, 0, -1],
-                         [2, 0, -2],
-                         [1, 0, -1]])
-    expected_output_3 = convolve2d(input_image_3, kernel_3, mode='valid')
-    output_brute_3 = convolution_brute_force(input_image_3, kernel_3)
-    output_ai_3 = convolution_AI(input_image_3, kernel_3)
-    print("\nTest Case 3: Input image with all zeros")
-    print("Expected Output:\n", expected_output_3)
-    print("Brute-Force Output:\n", output_brute_3)
-    print("FFT-Based Output:\n", output_ai_3)
-    print("Brute-Force Pass:", np.allclose(output_brute_3, expected_output_3))
-    print("FFT-Based Pass:", np.allclose(output_ai_3, expected_output_3))
+    # FFT-based result
+    plt.subplot(1, 4, 3)
+    plt.title("FFT-Based Convolution")
+    plt.imshow(fft_result, cmap="gray")
+    plt.axis("off")
 
-    # Test Case 4: Random input image and kernel (odd sizes only)
-    np.random.seed(42)  # Set seed for reproducibility
-    input_image_4 = np.random.randint(0, 10, (9, 9))
-    kernel_4 = np.random.randint(-5, 5, (5, 5))
-    expected_output_4 = convolve2d(input_image_4, kernel_4, mode='valid')
-    output_brute_4 = convolution_brute_force(input_image_4, kernel_4)
-    output_ai_4 = convolution_AI(input_image_4, kernel_4)
-    print("\nTest Case 4: Random input image and 5x5 kernel")
-    print("Input Image:\n", input_image_4)
-    print("Kernel:\n", kernel_4)
-    print("Expected Output:\n", expected_output_4)
-    print("Brute-Force Output:\n", output_brute_4)
-    print("FFT-Based Output:\n", output_ai_4)
-    print("Brute-Force Pass:", np.allclose(output_brute_4, expected_output_4))
-    print("FFT-Based Pass:", np.allclose(output_ai_4, expected_output_4))
+    # convolve2d result
+    plt.subplot(1, 4, 4)
+    plt.title("convolve2d Convolution")
+    plt.imshow(convolve2d_result, cmap="gray")
+    plt.axis("off")
+
+    plt.tight_layout(rect=[0, 0, 1, 0.95])  # Adjust layout to fit the title
+    plt.show()
+
+
+def test_convolution_with_image(filepath, kernel, kernel_description):
+    """
+    Test and compare convolution methods with a real image.
+    Args:
+        filepath: Path to the image file.
+        kernel: 2D numpy array representing the kernel.
+        kernel_description: Description of the kernel filter.
+
+    Returns:
+        None
+    """
+    # Load the image
+    image = load_image(filepath)
+    print(f"Loaded Image Shape: {image.shape}")
+
+    # Apply brute-force convolution
+    brute_force_result = convolution_brute_force(image, kernel)
+
+    # Apply FFT-based convolution
+    fft_result = convolution_AI(image, kernel)
+
+    # Apply scipy's convolve2d for comparison
+    convolve2d_result = convolve2d(image, kernel, mode="valid")
+
+    # Visualize results
+    visualize_convolution_results(image, brute_force_result, fft_result, convolve2d_result, kernel_description)
+
 
 if __name__ == "__main__":
-    test_convolution_methods()
+    # Path to the MRI brain scan image
+    filepath = "/Users/paras/Desktop/B1 Final Project/MRI Brain Scan 1.jpg"
+
+    # Define a test kernel (e.g., Sobel edge detection kernel)
+    kernel = np.array([[1, 0, -1],
+                       [2, 0, -2],
+                       [1, 0, -1]])  # Sobel kernel for edge detection
+
+    # Kernel description
+    kernel_description = "Sobel Edge Detection Kernel"
+
+    # Test convolution methods with the image
+    test_convolution_with_image(filepath, kernel, kernel_description)

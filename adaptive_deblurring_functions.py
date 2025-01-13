@@ -46,9 +46,6 @@ def convolution_brute_force(input_image, kernel):
 import numpy as np
 from scipy.fft import fft2, ifft2
 
-import numpy as np
-from scipy.fft import fft2, ifft2
-
 def convolution_AI(input_image, kernel):
     """
     Perform 2D convolution of an input image with a kernel using the FFT method.
@@ -98,3 +95,22 @@ def convolution_AI(input_image, kernel):
     output_image = convolved_image[start_row:start_row + valid_height, start_col:start_col + valid_width]
 
     return output_image
+
+from PIL import Image
+import numpy as np
+
+def load_image(filepath, grayscale=True):
+    """
+    Load an image and convert it to a numpy array.
+    Args:
+        filepath: Path to the image file.
+        grayscale: Whether to convert the image to grayscale.
+
+    Returns:
+        image_array: 2D numpy array of the image.
+    """
+    img = Image.open(filepath)
+    if grayscale:
+        img = img.convert("L")  # Convert to grayscale
+    image_array = np.array(img)
+    return image_array
