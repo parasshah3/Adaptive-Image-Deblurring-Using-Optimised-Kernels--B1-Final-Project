@@ -81,15 +81,45 @@ def test_convolution_with_image(filepath, kernel, kernel_description):
 
 if __name__ == "__main__":
     # Path to the MRI brain scan image
-    filepath = "/Users/paras/Desktop/B1 Final Project/MRI Brain Scan 1.jpg"
+    filepath = "/Users/paras/Desktop/B1 Final Project/cameraman.tif"
 
-    # Define a test kernel (e.g., Sobel edge detection kernel)
-    kernel = np.array([[1, 0, -1],
-                       [2, 0, -2],
-                       [1, 0, -1]])  # Sobel kernel for edge detection
+    # Define kernels
+    kernels = {
+        "1": (np.array([[1, 0, -1], [2, 0, -2], [1, 0, -1]]), "Sobel Edge Detection (Horizontal)"),
+        "2": (np.array([[1, 2, 1], [2, 4, 2], [1, 2, 1]]) / 16, "Gaussian Blur Kernel (3x3)"),
+        "3": (np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]]), "Laplacian Kernel (3x3)"),
+        "4": (np.array([[-2, -1, 0], [-1, 1, 1], [0, 1, 2]]), "Emboss Kernel (3x3)"),
+        "5": (np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]]), "Sharpen Kernel (3x3)"),
+        "6": (np.array([[1, 4, 6, 4, 1],
+                        [4, 16, 24, 16, 4],
+                        [6, 24, 36, 24, 6],
+                        [4, 16, 24, 16, 4],
+                        [1, 4, 6, 4, 1]]) / 256, "Gaussian Blur Kernel (5x5)"),
+        "7": (np.array([[1, 2, 1, 2, 1],
+                        [2, 4, 2, 4, 2],
+                        [1, 2, -24, 2, 1],
+                        [2, 4, 2, 4, 2],
+                        [1, 2, 1, 2, 1]]) / 16, "Hybrid Laplacian-Gaussian Kernel (5x5)"),
+        "8": (np.ones((7, 7)) / 49, "Uniform Box Blur (7x7)"),
+        "9": (np.array([[0, -1, 0, -1, 0],
+                        [-1, 2, -1, 2, -1],
+                        [0, -1, 0, -1, 0],
+                        [-1, 2, -1, 2, -1],
+                        [0, -1, 0, -1, 0]]), "Pattern Detection Kernel (5x5)"),
+        "10": (np.array([[1, -1], [-1, 1]]), "Checkerboard Pattern Kernel (2x2)")
+    }
 
-    # Kernel description
-    kernel_description = "Sobel Edge Detection Kernel"
+    # Display kernel options to the user
+    print("Choose a kernel to apply:")
+    for key, (_, description) in kernels.items():
+        print(f"{key}: {description}")
+    
+    # Get user input
+    choice = input("Enter the number corresponding to your choice: ")
 
-    # Test convolution methods with the image
-    test_convolution_with_image(filepath, kernel, kernel_description)
+    if choice in kernels:
+        kernel, kernel_description = kernels[choice]
+        # Test convolution methods with the chosen kernel
+        test_convolution_with_image(filepath, kernel, kernel_description)
+    else:
+        print("Invalid choice. Please run the script again and choose a valid option.")
