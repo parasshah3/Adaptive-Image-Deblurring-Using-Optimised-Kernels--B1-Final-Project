@@ -25,6 +25,7 @@ def convolution_brute_force(input_image,kernel):
 
     #Initalise output image array of size; (n-m+1) x (n-m+1)
     output_image = np.zeros((input_image_size[0]-kernel_size[0]+1,input_image_size[1]-kernel_size[1]+1))
+    print(f"Output Image Size: {output_image.shape}")
     
     #Iterate over the input image applying the kernel to every pixel
     for i in range(output_image.shape[0]):
@@ -35,5 +36,6 @@ def convolution_brute_force(input_image,kernel):
 
             #Apply the kernel to the region via element-wise multiplication and sum the results
             output_image[i,j] = np.sum(region * kernel)
+            print(f"Output Image Value at ({i},{j}): {output_image[i,j]}")
 
     return output_image
