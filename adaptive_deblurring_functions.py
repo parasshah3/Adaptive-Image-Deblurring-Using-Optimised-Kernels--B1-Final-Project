@@ -114,3 +114,38 @@ def load_image(filepath, grayscale=True):
         img = img.convert("L")  # Convert to grayscale
     image_array = np.array(img)
     return image_array
+
+import numpy as np
+from scipy.ndimage import sobel
+
+def get_global_properties(image):
+    """
+    Computes the global properties of the image: resolution, global variance, and global gradient magnitude.
+
+    Args:
+        image (numpy.ndarray): The input image as a 2D or 3D array (grayscale or RGB).
+
+    Returns:
+        tuple: A tuple containing:
+            - resolution (tuple): Tuple (height, width) of the image.
+            - global_variance (float): Global variance of the image intensity.
+            - global_gradient_magnitude (float): Average gradient magnitude of the image.
+    """
+    # Step 1: Compute resolution
+    height, width = image.shape[:2]
+
+    # Step 2: Compute global variance
+    if len(image.shape) == 3:  # RGB Image
+        image_gray = np.mean(image, axis=2)  # Convert to grayscale by averaging channels
+    else:
+        image_gray = image  # Grayscale Image
+
+    global_variance = float(np.var(image_gray))
+
+    # Step 3: Compute global gradient magnitude
+    grad_x = sobel(image_gray, axis=1)  # Horizontal gradient
+    grad_y = sobel(image_gray, axis=0)  # Vertical gradient
+    gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
+    global_gradient_magnitude = np.mean(gradient_magnitude)
+
+    return (height, width), global_variance, global_gradient_magnitude
