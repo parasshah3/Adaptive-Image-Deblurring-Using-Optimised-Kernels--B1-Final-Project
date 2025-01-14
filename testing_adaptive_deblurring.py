@@ -1,29 +1,26 @@
-# Testing script for kernel and patch size selection
-
-from adaptive_deblurring_functions import load_image, get_kernel_patch_sizes
+from adaptive_deblurring_functions import load_image, divide_into_patches
 
 # Paths to the test images
 image_paths = [
-    "/Users/paras/Desktop/B1 Final Project/cameraman.tif",
+    "/Users/paras/Desktop/B1 Final Project/cameraman.tif",  # Replace with actual paths
     "/Users/paras/Desktop/B1 Final Project/lena_color_512.tif",
     "/Users/paras/Desktop/B1 Final Project/mandril_color.tif",
     "/Users/paras/Desktop/B1 Final Project/MRI Brain Scan 1.jpg",
     "/Users/paras/Desktop/B1 Final Project/pirate.tif",
 ]
 
-# Analyze each image
+# Test the function for each image
 for image_path in image_paths:
     print(f"Analyzing Image: {image_path}")
     
     # Load the image as a grayscale numpy array
     image = load_image(image_path, grayscale=True)
     
-    # Get kernel and patch sizes
-    properties = get_kernel_patch_sizes(image)
+    # Divide the image into patches
+    patches = divide_into_patches(image, overlap_percentage=50)
     
     # Output the results
-    print(f"Resolution: {properties['resolution']}")
-    print(f"Global Variance (σ²_global): {properties['global_variance']:.4f}")
-    print(f"Kernel Size: {properties['kernel_size']}")
-    print(f"Patch Size: {properties['patch_size']}")
+    print(f"Image Shape: {image.shape}")
+    print(f"Number of Patches: {len(patches)}")
+    print(f"Patch Shape: {patches[0].shape if patches else 'N/A'}")
     print("-" * 40)

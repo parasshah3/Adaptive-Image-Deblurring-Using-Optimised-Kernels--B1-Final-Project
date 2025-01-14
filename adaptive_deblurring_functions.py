@@ -189,3 +189,31 @@ def get_kernel_patch_sizes(image):
         "global_variance": global_variance,
         "resolution": resolution,
     }
+
+def divide_into_patches(image, overlap_percentage=50):
+    """
+    Divides the input image into patches using a sliding window approach with overlap.
+    
+    Args:
+        image (numpy.ndarray): The input image as a 2D array (grayscale).
+        overlap_percentage (int, optional): The percentage of overlap between patches. Default is 50%.
+
+    Returns:
+        list: A list of patches extracted from the image.
+    """
+    # Get the kernel and patch sizes using previously defined functions
+    properties = get_kernel_patch_sizes(image)
+    patch_size = properties['patch_size']
+
+    # Calculate step size based on overlap percentage
+    step_size = int((1 - overlap_percentage / 100) * patch_size[0])  # calculate step size based on overlap
+
+    patches = []
+    height, width = image.shape
+
+    for i in range(0, height - patch_size[0] + 1, step_size):
+        for j in range(0, width - patch_size[1] + 1, step_size):
+            patch = image[i:i + patch_size[0], j:j + patch_size[1]]
+            patches.append(patch)
+
+    return patches
