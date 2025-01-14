@@ -1,58 +1,50 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-from adaptive_deblurring_functions import load_image, divide_into_patches
+from adaptive_deblurring_functions import load_image, get_properties, dynamic_local_kernel_starting_point, divide_into_patches
 
-# Load an image (choose one from the provided paths)
+# Load the input image (cameraman image)
 image_path = "/Users/paras/Desktop/B1 Final Project/cameraman.tif"
 image = load_image(image_path, grayscale=True)
 
-# Divide the image into patches using a 50% overlap
-patches_list = divide_into_patches(image, overlap_percentage=50)
+# Define overlap percentage (e.g., 50%)
+overlap_percentage = 50
 
-# Define the color list to differentiate patches
-colors = ['r', 'g', 'b', 'y', 'c', 'm', 'orange', 'purple', 'brown', 'pink']
+# Divide the image into patches
+patches = divide_into_patches(image, overlap_percentage=overlap_percentage)
 
-# Plot the image
-fig, ax = plt.subplots(figsize=(10, 10))
-ax.imshow(image, cmap='gray')
+# Initialize a list to store local variances
+local_variances = []
 
-# Get the image dimensions and patch size
-height, width = image.shape
-patch_height, patch_width = patches_list[0].shape  # All patches have the same size
+# Compute local variance for each patch and store it
+for i, patch in enumerate(patches):
+    _, local_variance, _ = get_properties(patch)
+    local_variances.append(local_variance)
 
-# Calculate center position
-center_x = width // 2
-center_y = height // 2
+# Calculate range, mean, and median of local variances
+variance_range = np.ptp(local_variances)  # Range = max - min
+variance_mean = np.mean(local_variances)
+variance_median = np.median(local_variances)
 
-# Calculate patch offsets to center 3 consecutive patches
-start_patch_idx = len(patches_list) // 2  # Start from the middle of the patches list
-patch_spacing = patch_width // 2  # Overlap is 50%, so the spacing is half the patch width
+# Display the range, mean, and median of the local variances
+print(f"Range of Local Variances: {variance_range:.4f}")
+print(f"Mean of Local Variances: {variance_mean:.4f}")
+print(f"Median of Local Variances: {variance_median:.4f}")
 
-# List to hold labels for legend
-patch_labels = []
-
-# Plot three consecutive patches centered around the middle of the image
-for i, patch_idx in enumerate([start_patch_idx, start_patch_idx + 1, start_patch_idx + 2]):
-    patch = patches_list[patch_idx]
+# Now let's also visualize which kernel has been chosen for each patch
+for i, patch in enumerate(patches):
+    # Get the kernel for the current patch
+    _, local_variance, _ = get_properties(patch)
     
-    # Calculate the top-left corner of the patch to place it near the center
-    top_left_x = center_x - patch_width // 2 + i * patch_spacing  # Adjust x-coordinate for spacing
-    top_left_y = center_y - patch_height // 2  # Adjust y-coordinate for centering
+    # Determine which kernel to use for the current patch
+    kernel = dynamic_local_kernel_starting_point(patch, kernel_size=(3, 3))  # Example for kernel size 3x3
 
-    # Use different colors for each rectangle
-    rect = patches.Rectangle((top_left_x, top_left_y), patch.shape[1], patch.shape[0], linewidth=2,
-                             edgecolor=colors[i % len(colors)], facecolor='none')
-
-    ax.add_patch(rect)
+    # Display the selected kernel
+    print(f"Patch {i+1}: Local Variance = {local_variance:.4f}, Selected Kernel:")
+    print(kernel)
     
-    # Add the label to the patch_labels list for the legend
-    patch_labels.append(f'Patch {patch_idx + 1}')
-
-# Add legend outside the image
-plt.legend(patch_labels, loc='center left', bbox_to_anchor=(1, 0.5), title='Patches')
-
-# Display the image with rectangles and labels
-plt.title("Three Consecutive Patches Centered in the Image")
-plt.tight_layout()
-plt.show()
+    # Visualize patch and draw a red rectangle around it
+    plt.figure(figsize=(6, 6))
+    plt.imshow(image, cmap='gray')
+    plt.gca().add_patch(plt.Rectangle((i * 64, 0), 64, 64, linewidth=2, edgecolor='r', facecolor='none'))
+    plt.title(f"Patch {i+1} - Local Variance: {local_variance:.4f}")
+    plt.show()

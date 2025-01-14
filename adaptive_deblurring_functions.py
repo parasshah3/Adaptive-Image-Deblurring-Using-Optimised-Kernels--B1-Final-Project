@@ -43,7 +43,6 @@ def convolution_brute_force(input_image, kernel):
     return output_image
 
 
-import numpy as np
 from scipy.fft import fft2, ifft2
 
 def convolution_AI(input_image, kernel):
@@ -97,7 +96,6 @@ def convolution_AI(input_image, kernel):
     return output_image
 
 from PIL import Image
-import numpy as np
 
 def load_image(filepath, grayscale=True):
     """
@@ -115,40 +113,41 @@ def load_image(filepath, grayscale=True):
     image_array = np.array(img)
     return image_array
 
-import numpy as np
 from scipy.ndimage import sobel
 
-def get_global_properties(image):
+def get_properties(image):
     """
-    Computes the global properties of the image: resolution, global variance, and global gradient magnitude.
+    Computes the properties of the image or patch: resolution, variance, and gradient magnitude.
 
     Args:
-        image (numpy.ndarray): The input image as a 2D or 3D array (grayscale or RGB).
+        image (numpy.ndarray): The input image or patch as a 2D array (grayscale).
 
     Returns:
         tuple: A tuple containing:
-            - resolution (tuple): Tuple (height, width) of the image.
-            - global_variance (float): Global variance of the image intensity.
-            - global_gradient_magnitude (float): Average gradient magnitude of the image.
+            - resolution (tuple): Tuple (height, width) of the image/patch.
+            - variance (float): Variance of the image/patch intensity.
+            - gradient_magnitude (float): Average gradient magnitude of the image/patch.
     """
-    # Step 1: Compute resolution
-    height, width = image.shape[:2]
+    # Step 1: Compute resolution (height, width)
+    height, width = image.shape
 
-    # Step 2: Compute global variance
+    # Step 2: Compute variance
+    # If the image has multiple channels (RGB), convert to grayscale by averaging channels
     if len(image.shape) == 3:  # RGB Image
         image_gray = np.mean(image, axis=2)  # Convert to grayscale by averaging channels
     else:
-        image_gray = image  # Grayscale Image
+        image_gray = image  # Grayscale Image or 2D patch
 
-    global_variance = float(np.var(image_gray))
+    # Compute variance
+    variance = float(np.var(image_gray))
 
-    # Step 3: Compute global gradient magnitude
+    # Step 3: Compute gradient magnitude
     grad_x = sobel(image_gray, axis=1)  # Horizontal gradient
     grad_y = sobel(image_gray, axis=0)  # Vertical gradient
     gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2)
-    global_gradient_magnitude = np.mean(gradient_magnitude)
+    gradient_magnitude = np.mean(gradient_magnitude)
 
-    return (height, width), global_variance, global_gradient_magnitude
+    return (height, width), variance, gradient_magnitude 
 
 def get_kernel_patch_sizes(image):
     """
@@ -165,13 +164,13 @@ def get_kernel_patch_sizes(image):
             - 'resolution': The resolution of the image.
     """
     # Compute global properties of the image
-    resolution, global_variance, _ = get_global_properties(image)
+    resolution, global_variance, _ = get_properties(image)
 
     # Determine kernel size based on global variance
-    if global_variance < 2000:  # Low variance
+    if global_variance < 1000:  # Low variance
+        kernel_size = (7, 7)
+    elif global_variance < 2000:  # Medium variance
         kernel_size = (5, 5)
-    elif global_variance < 3000:  # Medium variance
-        kernel_size = (3, 3)
     else:  # High variance
         kernel_size = (3, 3)
 
@@ -217,3 +216,68 @@ def divide_into_patches(image, overlap_percentage=50):
             patches.append(patch)
 
     return patches
+
+import numpy as np
+
+def dynamic_local_kernel_starting_point(patch, kernel_size):
+    """
+    Return a filter (kernel) starting point for a given patch based on its local variance
+    and the specified kernel size.
+    
+    Args:
+        patch (numpy.ndarray): The patch of the image (grayscale).
+        kernel_size (tuple): The kernel size as a tuple (height, width) (fixed size).
+
+    Returns:
+        numpy.ndarray: A filter (kernel) starting point for high or low local variance.
+    """
+    # Calculate the local variance of the patch
+    _, local_variance, _ = get_properties(patch)  # Use previously defined function to get local variance
+    
+    # Determine the filter based on local variance
+    if local_variance > 1000:  # High variance
+        if kernel_size == (3, 3):
+            # Laplacian sharpening filter for high variance (3x3)
+            kernel = np.array([[0, 1, 0], 
+                               [1, -4, 1], 
+                               [0, 1, 0]])
+        elif kernel_size == (5, 5):
+            # Laplacian sharpening filter for high variance (5x5)
+            kernel = np.array([[0, 0, 1, 0, 0], 
+                               [0, 1, 1, 1, 0], 
+                               [1, 1, -8, 1, 1], 
+                               [0, 1, 1, 1, 0], 
+                               [0, 0, 1, 0, 0]])
+        elif kernel_size == (7, 7):
+            # Laplacian sharpening filter for high variance (7x7)
+            kernel = np.array([[0, 0, 0, 1, 0, 0, 0], 
+                               [0, 1, 1, 2, 1, 1, 0], 
+                               [0, 1, 1, 4, 1, 1, 0], 
+                               [1, 2, 4, -24, 4, 2, 1], 
+                               [0, 1, 1, 4, 1, 1, 0], 
+                               [0, 1, 1, 2, 1, 1, 0], 
+                               [0, 0, 0, 1, 0, 0, 0]])
+    else:  # Low variance
+        if kernel_size == (3, 3):
+            # Gaussian Blur filter for low variance (3x3)
+            kernel = np.array([[1, 2, 1], 
+                               [2, 4, 2], 
+                               [1, 2, 1]]) / 16  # 3x3 Gaussian kernel
+        elif kernel_size == (5, 5):
+            # Gaussian Blur filter for low variance (5x5)
+            kernel = np.array([[1, 4, 6, 4, 1], 
+                               [4, 16, 24, 16, 4], 
+                               [6, 24, 36, 24, 6], 
+                               [4, 16, 24, 16, 4], 
+                               [1, 4, 6, 4, 1]]) / 256  # 5x5 Gaussian kernel
+        elif kernel_size == (7, 7):
+            # Gaussian Blur filter for low variance (7x7)
+            kernel = np.array([[1, 6, 15, 20, 15, 6, 1], 
+                               [6, 36, 90, 120, 90, 36, 6], 
+                               [15, 90, 225, 300, 225, 90, 15],
+                                [20, 120, 300, 400, 300, 120, 20], 
+                                [15, 90, 225, 300, 225, 90, 15], 
+                                [6, 36, 90, 120, 90, 36, 6], 
+                                [1, 6, 15, 20, 15, 6, 1]]) / 1600  # 7x7 Gaussian kernel
+    
+    return kernel
