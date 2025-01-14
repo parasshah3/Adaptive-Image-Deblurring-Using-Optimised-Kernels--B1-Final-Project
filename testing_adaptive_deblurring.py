@@ -1,10 +1,10 @@
-# Testing script for get_global_properties function
+# Testing script for kernel and patch size selection
 
-from adaptive_deblurring_functions import get_global_properties, load_image
+from adaptive_deblurring_functions import load_image, get_kernel_patch_sizes
 
 # Paths to the test images
 image_paths = [
-    "/Users/paras/Desktop/B1 Final Project/cameraman.tif",  # Replace with actual paths
+    "/Users/paras/Desktop/B1 Final Project/cameraman.tif",
     "/Users/paras/Desktop/B1 Final Project/lena_color_512.tif",
     "/Users/paras/Desktop/B1 Final Project/mandril_color.tif",
     "/Users/paras/Desktop/B1 Final Project/MRI Brain Scan 1.jpg",
@@ -14,15 +14,16 @@ image_paths = [
 # Analyze each image
 for image_path in image_paths:
     print(f"Analyzing Image: {image_path}")
+    
     # Load the image as a grayscale numpy array
     image = load_image(image_path, grayscale=True)
     
-    # Compute global properties
-    resolution, global_variance, global_gradient_magnitude = get_global_properties(image)
+    # Get kernel and patch sizes
+    properties = get_kernel_patch_sizes(image)
     
     # Output the results
-    print(f"Global Variance (Type: {type(global_variance)}): {global_variance}")
-    print(f"Resolution: {resolution}")
-    print(f"Global Variance (σ²_global): {global_variance:.4f}")
-    print(f"Global Gradient Magnitude (G_global): {global_gradient_magnitude:.4f}")
+    print(f"Resolution: {properties['resolution']}")
+    print(f"Global Variance (σ²_global): {properties['global_variance']:.4f}")
+    print(f"Kernel Size: {properties['kernel_size']}")
+    print(f"Patch Size: {properties['patch_size']}")
     print("-" * 40)

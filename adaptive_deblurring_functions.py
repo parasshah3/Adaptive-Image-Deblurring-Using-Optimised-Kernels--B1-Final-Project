@@ -149,3 +149,43 @@ def get_global_properties(image):
     global_gradient_magnitude = np.mean(gradient_magnitude)
 
     return (height, width), global_variance, global_gradient_magnitude
+
+def get_kernel_patch_sizes(image):
+    """
+    Select kernel and patch size based on the image's global variance and resolution.
+
+    Args:
+        image (numpy.ndarray): The input image as a 2D array (grayscale).
+
+    Returns:
+        dict: A dictionary containing:
+            - 'kernel_size': The selected kernel size as a tuple (height, width).
+            - 'patch_size': The selected patch size as a tuple (height, width).
+            - 'global_variance': The global variance of the image.
+            - 'resolution': The resolution of the image.
+    """
+    # Compute global properties of the image
+    resolution, global_variance, _ = get_global_properties(image)
+
+    # Determine kernel size based on global variance
+    if global_variance < 2000:  # Low variance
+        kernel_size = (5, 5)
+    elif global_variance < 3000:  # Medium variance
+        kernel_size = (3, 3)
+    else:  # High variance
+        kernel_size = (3, 3)
+
+    # Determine patch size based on resolution
+    if resolution[0] >= 1024 or resolution[1] >= 1024:  # Very high resolution
+        patch_size = (128, 128)
+    elif resolution[0] >= 512 and resolution[1] >= 512:  # High resolution
+        patch_size = (64, 64)
+    else:  # Low resolution
+        patch_size = (32, 32)
+
+    return {
+        "kernel_size": kernel_size,
+        "patch_size": patch_size,
+        "global_variance": global_variance,
+        "resolution": resolution,
+    }
