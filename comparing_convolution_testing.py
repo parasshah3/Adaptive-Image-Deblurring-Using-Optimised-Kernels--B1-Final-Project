@@ -1,85 +1,85 @@
 # B1 Final Project: Adaptive Deblurring Using Optimised Kernels
 # Paras Shah
 
-import time
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.signal import convolve2d
+from skimage.metrics import mean_squared_error as mse
 from adaptive_deblurring_functions import convolution_brute_force, convolution_AI, load_image
 
-def time_convolution_methods(image_paths, kernels):
+import matplotlib
+matplotlib.use('TkAgg')  # Or 'Qt5Agg', depending on your setup
+
+def compare_mse(image_path, kernels):
     """
-    Time the execution of three convolution methods for each image and kernel.
+    Compare MSE of convolution methods (Brute-Force and FFT-Based).
     
     Args:
-        image_paths: List of file paths to the images.
+        image_path: File path to the test image.
         kernels: Dictionary of kernels (name: (kernel_array, description)).
     
     Returns:
-        results: Dictionary with average time taken for each kernel by each method.
+        mse_results: Dictionary containing MSE for each kernel and method.
     """
-    results = {method: [] for method in ["Brute-Force", "FFT-Based", "convolve2d"]}
-    
+    mse_results = {}
+    image = load_image(image_path)
+    print(f"Loaded Image: {image_path}, Shape: {image.shape}")
+
     for kernel_name, (kernel, kernel_description) in kernels.items():
-        print(f"\nTiming convolution methods for Kernel: {kernel_name} ({kernel_description})")
-        times = {"Brute-Force": [], "FFT-Based": [], "convolve2d": []}
+        print(f"\nEvaluating Kernel: {kernel_name} ({kernel_description})")
 
-        for path in image_paths:
-            image = load_image(path)
-            print(f"Processing Image: {path}, Shape: {image.shape}")
+        # Compute reference result using convolve2d
+        reference_output = convolve2d(image, kernel, mode="valid")
 
-            # Time Brute-Force method
-            start_time = time.time()
-            convolution_brute_force(image, kernel)
-            times["Brute-Force"].append(time.time() - start_time)
+        # Brute-Force method
+        brute_force_output = convolution_brute_force(image, kernel)
+        mse_brute_force = mse(reference_output, brute_force_output)
 
-            # Time FFT-Based method
-            start_time = time.time()
-            convolution_AI(image, kernel)
-            times["FFT-Based"].append(time.time() - start_time)
+        # FFT-Based method
+        fft_based_output = convolution_AI(image, kernel)
+        mse_fft_based = mse(reference_output, fft_based_output)
 
-            # Time convolve2d method
-            start_time = time.time()
-            convolve2d(image, kernel, mode="valid")
-            times["convolve2d"].append(time.time() - start_time)
+        # Store results
+        mse_results[kernel_name] = {
+            "Kernel Description": kernel_description,
+            "MSE Brute-Force": mse_brute_force,
+            "MSE FFT-Based": mse_fft_based,
+        }
+        print(f"Brute-Force MSE: {mse_brute_force:.4f}, FFT-Based MSE: {mse_fft_based:.4f}")
 
-        # Calculate average times for the current kernel
-        for method in times:
-            avg_time_ms = np.mean(times[method]) * 1000  # Convert to milliseconds
-            results[method].append(avg_time_ms)
-            print(f"Average time for {method}: {avg_time_ms:.4f} ms")
+    return mse_results
 
-    return results
-
-def plot_efficiency_results(kernels, results):
+def display_mse_results(mse_results):
     """
-    Plot the average execution times for each method and kernel.
+    Display and visualize the MSE results for each kernel.
 
     Args:
-        kernels: Dictionary of kernels (name: (kernel_array, description)).
-        results: Dictionary with average times for each method.
+        mse_results: Dictionary containing MSE for each kernel and method.
 
     Returns:
         None
     """
-    kernel_names = [f"{key}: {desc}" for key, (_, desc) in kernels.items()]
-    x = np.arange(len(kernels))  # x-axis positions
+    kernel_names = []
+    brute_force_mse = []
+    fft_based_mse = []
 
-    # Bar widths
-    bar_width = 0.2
+    for kernel, results in mse_results.items():
+        kernel_names.append(f"{kernel}: {results['Kernel Description']}")
+        brute_force_mse.append(results["MSE Brute-Force"])
+        fft_based_mse.append(results["MSE FFT-Based"])
 
-    # Create a grouped bar chart with log scale
-    plt.figure(figsize=(14, 7))
-    plt.bar(x - bar_width, results["Brute-Force"], width=bar_width, label="Brute-Force")
-    plt.bar(x, results["FFT-Based"], width=bar_width, label="FFT-Based")
-    plt.bar(x + bar_width, results["convolve2d"], width=bar_width, label="convolve2d")
+    # Plot results
+    x = np.arange(len(kernel_names))  # x-axis positions
+    bar_width = 0.4
+
+    plt.figure(figsize=(12, 6))
+    plt.bar(x - bar_width / 2, brute_force_mse, width=bar_width, label="Brute-Force")
+    plt.bar(x + bar_width / 2, fft_based_mse, width=bar_width, label="FFT-Based")
 
     # Add labels and title
     plt.xticks(x, kernel_names, rotation=45, ha="right")
-    plt.ylabel("Average Time (milliseconds, log scale)")
-    plt.xlabel("Kernel (Type: Description)")
-    plt.title("Average Convolution Times Across Kernels and Methods")
-    plt.yscale("log")  # Logarithmic scale
+    plt.ylabel("Mean Squared Error (MSE)")
+    plt.xlabel("Kernel")
+    plt.title("MSE Comparison Between Brute-Force and FFT-Based Convolution Methods")
     plt.legend()
     plt.tight_layout()
 
@@ -87,13 +87,8 @@ def plot_efficiency_results(kernels, results):
     plt.show()
 
 if __name__ == "__main__":
-    # File paths for the 5 test images
-    image_paths = [
-        "/Users/paras/Desktop/B1 Final Project/cameraman.tif",  # Replace with actual paths
-        "/Users/paras/Desktop/B1 Final Project/lena_color_512.tif",
-        "/Users/paras/Desktop/B1 Final Project/mandril_color.tif",
-        "/Users/paras/Desktop/B1 Final Project/MRI Brain Scan 1.jpg",
-        "/Users/paras/Desktop/B1 Final Project/pirate.tif",]
+    # File path to the test image
+    image_path = "/Users/paras/Desktop/B1 Final Project/cameraman.tif"  # Replace with your test image path
 
     # Define kernels
     kernels = {
@@ -121,8 +116,8 @@ if __name__ == "__main__":
                          [0, -1, 0, -1, 0]]), "Pattern Kernel (5x5)")
     }
 
-    # Run timing tests
-    results = time_convolution_methods(image_paths, kernels)
+    # Run MSE comparison
+    mse_results = compare_mse(image_path, kernels)
 
-    # Plot the results
-    plot_efficiency_results(kernels, results)
+    # Display the results
+    display_mse_results(mse_results)
