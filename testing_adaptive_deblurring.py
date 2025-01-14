@@ -19,11 +19,15 @@ patches = divide_into_patches(input_image, overlap_percentage=overlap_percentage
 global_properties = get_kernel_patch_sizes(input_image)
 kernel_size = global_properties['kernel_size']
 patch_size = global_properties['patch_size']
+print(f"patch_size: {patch_size}, kernel_size: {kernel_size}")
 
 # Step 4: Generate dynamic kernels for each patch
 kernels = dynamic_kernel_selection(patches, kernel_size)
 
 # Step 5: Reconstruct the image using the patches and kernels
+print(f"patch_size: {patch_size} (type: {type(patch_size)})")
+if not isinstance(patch_size, tuple):
+    raise TypeError(f"patch_size must be a tuple, but got {type(patch_size)}: {patch_size}")
 reconstructed_image = image_reconstruction(input_image.shape, patches, kernels, patch_size, overlap_percentage)
 
 # Step 6: Display the results

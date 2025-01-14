@@ -246,17 +246,22 @@ def dynamic_local_kernel_starting_point(patch, kernel_size):
 
     Returns:
         numpy.ndarray: A filter (kernel) starting point for high or low local variance.
+        high_variance (bool): Flag indicating high variance (True) or low variance (False).
     """
     # Calculate the local variance of the patch
     _, local_variance, _ = get_properties(patch)  # Use previously defined function to get local variance
-    
+    print(f'local_variance: {local_variance}')
+
     # Determine the filter based on local variance
-    if local_variance > 10:  # High variance
+    if local_variance > 3500:  # High variance
+
+        high_variance = True # Flag for high variance
+
         if kernel_size == (3, 3):
             # Laplacian sharpening filter for high variance (3x3)
-            kernel = np.array([[0, 1, 0], 
-                               [1, -2, 1], 
-                               [0, 1, 0]])
+            kernel = np.array([[-1, -1, -1],
+                              [-1, 8, -1],
+                              [-1, -1, -1]])
         elif kernel_size == (5, 5):
             # Laplacian sharpening filter for high variance (5x5)
             kernel = np.array([[0, 0, 1, 0, 0], 
@@ -274,6 +279,9 @@ def dynamic_local_kernel_starting_point(patch, kernel_size):
                                [0, 1, 1, 2, 1, 1, 0], 
                                [0, 0, 0, 1, 0, 0, 0]])
     else:  # Low variance
+
+        high_variance = False # Flag for low variance
+
         if kernel_size == (3, 3):
             # Gaussian Blur filter for low variance (3x3)
             kernel = np.array([[1, 2, 1], 
@@ -300,23 +308,29 @@ def dynamic_local_kernel_starting_point(patch, kernel_size):
 
 def dynamic_kernel_selection(patches, kernel_size):
     """
-    Select a kernel dynamically for each patch based on its local variance.
+    Select a kernel dynamically for each patch based on its local variance
+    and track whether the patch is high or low variance.
 
     Args:
         patches (list of numpy.ndarray): List of 2D numpy arrays representing the image patches.
         kernel_size (tuple): The kernel size as a tuple (height, width) (fixed size).
 
     Returns:
-        list of numpy.ndarray: A list of 2D numpy arrays representing the kernels for each patch.
+        tuple: 
+            - kernels (list of numpy.ndarray): A list of 2D numpy arrays representing the kernels for each patch.
     """
     kernels = []
 
     # Iterate over each patch
     for patch in patches:
-        # Use the dynamic_local_kernel_starting_point() function to select the kernel
+        # Use the dynamic_local_kernel_starting_point() function to select the kernel and determine variance flag
         kernel = dynamic_local_kernel_starting_point(patch, kernel_size)
+        print(f"current kernel: {kernel}")
         kernels.append(kernel)
 
+        
+
+    print(f"kernels: {kernels} and type: {type(kernels)}")
     return kernels
 
 import numpy as np
@@ -328,6 +342,9 @@ import matplotlib.pyplot as plt
 
 from scipy.signal import convolve2d
 import numpy as np
+
+import numpy as np
+from scipy.signal import convolve2d
 
 def image_reconstruction(image_shape, patches, kernels, patch_size, overlap_percentage=50):
     """
@@ -344,47 +361,36 @@ def image_reconstruction(image_shape, patches, kernels, patch_size, overlap_perc
     Returns:
         numpy.ndarray: The reconstructed deblurred image.
     """
-    # Initialize the output image and a count array for normalizing overlapping regions
-    output_image = np.zeros(image_shape, dtype=np.float64)
-    patch_counts = np.zeros(image_shape, dtype=np.float64)
+    # Initialize the output image and a patch count array for normalization
+    output_image = np.zeros(image_shape, dtype=np.float32)
+    patch_counts = np.zeros(image_shape, dtype=np.float32)
 
-    # Calculate the step size based on overlap percentage
+    # Calculate step size based on overlap percentage
     step_size = int((1 - overlap_percentage / 100) * patch_size[0])
 
-    # Image dimensions
-    height, width = image_shape
-    patch_index = 0
+    # Validate inputs
+    if not all(isinstance(kernel, np.ndarray) and kernel.ndim == 2 for kernel in kernels):
+        raise ValueError("All kernels must be 2D NumPy arrays.")
 
-    # Process each patch and update the output image and patch_counts
-    for i in range(0, height - patch_size[0] + 1, step_size):
-        for j in range(0, width - patch_size[1] + 1, step_size):
-            # Get the current patch and corresponding kernel
+    # Reconstruct the image
+    patch_index = 0
+    for i in range(0, image_shape[0] - patch_size[0] + 1, step_size):
+        for j in range(0, image_shape[1] - patch_size[1] + 1, step_size):
+            # Get the current patch and kernel
             patch = patches[patch_index]
             kernel = kernels[patch_index]
 
-            # Apply the kernel to the patch using convolution
+            # Convolve the patch with its kernel
             convolved_patch = convolve2d(patch, kernel, mode='same', boundary='symm')
 
             # Add the convolved patch to the corresponding region in the output image
             output_image[i:i + patch_size[0], j:j + patch_size[1]] += convolved_patch
-
-            # Increment the patch_counts array in the corresponding region
             patch_counts[i:i + patch_size[0], j:j + patch_size[1]] += 1
 
-            # Debug: Print patch_counts after every 50 patches
-            if patch_index % 50 == 0:
-                print(f"Patch {patch_index + 1}/{len(patches)} processed at region "
-                      f"({i}:{i + patch_size[0]}, {j}:{j + patch_size[1]})")
-                print(f"Patch Counts (current region):\n{patch_counts[i:i + patch_size[0], j:j + patch_size[1]]}")
-
+            # Increment patch index
             patch_index += 1
 
-    # Debug: Print final patch_counts array
-    print("Final Patch Counts Array (After All Updates):")
-    print(patch_counts)
-
-    # Normalize the output image to account for overlapping regions
-    print("Normalizing overlapping regions...")
-    normalized_image = np.divide(output_image, patch_counts, out=np.zeros_like(output_image), where=patch_counts > 0)
+    # Normalize the output image
+    normalized_image = np.divide(output_image, patch_counts, where=(patch_counts != 0))
 
     return normalized_image
