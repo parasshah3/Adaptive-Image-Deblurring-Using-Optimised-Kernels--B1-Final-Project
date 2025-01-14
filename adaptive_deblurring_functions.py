@@ -206,6 +206,7 @@ def divide_into_patches(image, overlap_percentage=50):
 
     # Calculate step size based on overlap percentage
     step_size = int((1 - overlap_percentage / 100) * patch_size[0])  # calculate step size based on overlap
+    print(f"Step size: {step_size}")
 
     patches = []
     height, width = image.shape
@@ -250,17 +251,17 @@ def dynamic_local_kernel_starting_point(patch, kernel_size):
     """
     # Calculate the local variance of the patch
     _, local_variance, _ = get_properties(patch)  # Use previously defined function to get local variance
-    print(f'local_variance: {local_variance}')
+    #print(f'local_variance: {local_variance}')
 
     # Determine the filter based on local variance
-    if local_variance > 3500:  # High variance
+    if local_variance > 3000:  # High variance
 
         high_variance = True # Flag for high variance
 
         if kernel_size == (3, 3):
             # Laplacian sharpening filter for high variance (3x3)
             kernel = np.array([[-1, -1, -1],
-                              [-1, 8, -1],
+                              [-1, 10, -1],
                               [-1, -1, -1]])
         elif kernel_size == (5, 5):
             # Laplacian sharpening filter for high variance (5x5)
@@ -325,12 +326,12 @@ def dynamic_kernel_selection(patches, kernel_size):
     for patch in patches:
         # Use the dynamic_local_kernel_starting_point() function to select the kernel and determine variance flag
         kernel = dynamic_local_kernel_starting_point(patch, kernel_size)
-        print(f"current kernel: {kernel}")
+        #print(f"current kernel: {kernel}")
         kernels.append(kernel)
 
         
 
-    print(f"kernels: {kernels} and type: {type(kernels)}")
+    #print(f"kernels: {kernels} and type: {type(kernels)}")
     return kernels
 
 import numpy as np
