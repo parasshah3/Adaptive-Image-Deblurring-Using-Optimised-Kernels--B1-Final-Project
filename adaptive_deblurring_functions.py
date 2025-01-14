@@ -210,10 +210,26 @@ def divide_into_patches(image, overlap_percentage=50):
     patches = []
     height, width = image.shape
 
+    # Calculate expected number of patches
+    expected_num_patches_x = (width - patch_size[1]) // step_size + 1
+    expected_num_patches_y = (height - patch_size[0]) // step_size + 1
+    expected_num_patches = expected_num_patches_x * expected_num_patches_y
+
+    # Print expected number of patches for verification
+    print(f"Expected number of patches: {expected_num_patches}")
+
+    # Iterate over the image to extract patches
     for i in range(0, height - patch_size[0] + 1, step_size):
         for j in range(0, width - patch_size[1] + 1, step_size):
             patch = image[i:i + patch_size[0], j:j + patch_size[1]]
             patches.append(patch)
+
+    # Verify the actual number of patches matches the expected
+    actual_num_patches = len(patches)
+    if actual_num_patches == expected_num_patches:
+        print(f"Patch count verification passed! Actual patches: {actual_num_patches}, Expected: {expected_num_patches}")
+    else:
+        print(f"Patch count verification failed! Actual patches: {actual_num_patches}, Expected: {expected_num_patches}")
 
     return patches
 
@@ -235,17 +251,17 @@ def dynamic_local_kernel_starting_point(patch, kernel_size):
     _, local_variance, _ = get_properties(patch)  # Use previously defined function to get local variance
     
     # Determine the filter based on local variance
-    if local_variance > 1000:  # High variance
+    if local_variance > 10:  # High variance
         if kernel_size == (3, 3):
             # Laplacian sharpening filter for high variance (3x3)
             kernel = np.array([[0, 1, 0], 
-                               [1, -4, 1], 
+                               [1, -2, 1], 
                                [0, 1, 0]])
         elif kernel_size == (5, 5):
             # Laplacian sharpening filter for high variance (5x5)
             kernel = np.array([[0, 0, 1, 0, 0], 
                                [0, 1, 1, 1, 0], 
-                               [1, 1, -8, 1, 1], 
+                               [1, 1, -4, 1, 1], 
                                [0, 1, 1, 1, 0], 
                                [0, 0, 1, 0, 0]])
         elif kernel_size == (7, 7):
@@ -253,7 +269,7 @@ def dynamic_local_kernel_starting_point(patch, kernel_size):
             kernel = np.array([[0, 0, 0, 1, 0, 0, 0], 
                                [0, 1, 1, 2, 1, 1, 0], 
                                [0, 1, 1, 4, 1, 1, 0], 
-                               [1, 2, 4, -24, 4, 2, 1], 
+                               [1, 2, 4, -12, 4, 2, 1], 
                                [0, 1, 1, 4, 1, 1, 0], 
                                [0, 1, 1, 2, 1, 1, 0], 
                                [0, 0, 0, 1, 0, 0, 0]])
@@ -281,3 +297,94 @@ def dynamic_local_kernel_starting_point(patch, kernel_size):
                                 [1, 6, 15, 20, 15, 6, 1]]) / 1600  # 7x7 Gaussian kernel
     
     return kernel
+
+def dynamic_kernel_selection(patches, kernel_size):
+    """
+    Select a kernel dynamically for each patch based on its local variance.
+
+    Args:
+        patches (list of numpy.ndarray): List of 2D numpy arrays representing the image patches.
+        kernel_size (tuple): The kernel size as a tuple (height, width) (fixed size).
+
+    Returns:
+        list of numpy.ndarray: A list of 2D numpy arrays representing the kernels for each patch.
+    """
+    kernels = []
+
+    # Iterate over each patch
+    for patch in patches:
+        # Use the dynamic_local_kernel_starting_point() function to select the kernel
+        kernel = dynamic_local_kernel_starting_point(patch, kernel_size)
+        kernels.append(kernel)
+
+    return kernels
+
+import numpy as np
+from scipy.signal import convolve2d
+
+import numpy as np
+from scipy.signal import convolve2d
+import matplotlib.pyplot as plt
+
+from scipy.signal import convolve2d
+import numpy as np
+
+def image_reconstruction(image_shape, patches, kernels, patch_size, overlap_percentage=50):
+    """
+    Reconstruct the deblurred image by applying the corresponding kernels to the patches
+    and combining the results into the full image.
+
+    Args:
+        image_shape (tuple): Shape of the original image (height, width).
+        patches (list of numpy.ndarray): List of 2D numpy arrays representing the patches.
+        kernels (list of numpy.ndarray): List of 2D numpy arrays representing the kernels for each patch.
+        patch_size (tuple): Tuple (height, width) representing the size of each patch.
+        overlap_percentage (float): Overlap percentage between patches (default: 50%).
+
+    Returns:
+        numpy.ndarray: The reconstructed deblurred image.
+    """
+    # Initialize the output image and a count array for normalizing overlapping regions
+    output_image = np.zeros(image_shape, dtype=np.float64)
+    patch_counts = np.zeros(image_shape, dtype=np.float64)
+
+    # Calculate the step size based on overlap percentage
+    step_size = int((1 - overlap_percentage / 100) * patch_size[0])
+
+    # Image dimensions
+    height, width = image_shape
+    patch_index = 0
+
+    # Process each patch and update the output image and patch_counts
+    for i in range(0, height - patch_size[0] + 1, step_size):
+        for j in range(0, width - patch_size[1] + 1, step_size):
+            # Get the current patch and corresponding kernel
+            patch = patches[patch_index]
+            kernel = kernels[patch_index]
+
+            # Apply the kernel to the patch using convolution
+            convolved_patch = convolve2d(patch, kernel, mode='same', boundary='symm')
+
+            # Add the convolved patch to the corresponding region in the output image
+            output_image[i:i + patch_size[0], j:j + patch_size[1]] += convolved_patch
+
+            # Increment the patch_counts array in the corresponding region
+            patch_counts[i:i + patch_size[0], j:j + patch_size[1]] += 1
+
+            # Debug: Print patch_counts after every 50 patches
+            if patch_index % 50 == 0:
+                print(f"Patch {patch_index + 1}/{len(patches)} processed at region "
+                      f"({i}:{i + patch_size[0]}, {j}:{j + patch_size[1]})")
+                print(f"Patch Counts (current region):\n{patch_counts[i:i + patch_size[0], j:j + patch_size[1]]}")
+
+            patch_index += 1
+
+    # Debug: Print final patch_counts array
+    print("Final Patch Counts Array (After All Updates):")
+    print(patch_counts)
+
+    # Normalize the output image to account for overlapping regions
+    print("Normalizing overlapping regions...")
+    normalized_image = np.divide(output_image, patch_counts, out=np.zeros_like(output_image), where=patch_counts > 0)
+
+    return normalized_image

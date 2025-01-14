@@ -1,50 +1,44 @@
-import numpy as np
 import matplotlib.pyplot as plt
-from adaptive_deblurring_functions import load_image, get_properties, dynamic_local_kernel_starting_point, divide_into_patches
+from adaptive_deblurring_functions import (
+    load_image,
+    divide_into_patches,
+    get_kernel_patch_sizes,
+    dynamic_kernel_selection,
+    image_reconstruction,
+)
 
-# Load the input image (cameraman image)
-image_path = "/Users/paras/Desktop/B1 Final Project/cameraman.tif"
-image = load_image(image_path, grayscale=True)
+# Step 1: Load the input image
+image_path = '/Users/paras/Desktop/B1 Final Project/cameraman.tif'  # Replace with the actual path to your image
+input_image = load_image(image_path, grayscale=True)
 
-# Define overlap percentage (e.g., 50%)
-overlap_percentage = 50
+# Step 2: Divide the image into patches
+overlap_percentage = 50  # Define the overlap percentage
+patches = divide_into_patches(input_image, overlap_percentage=overlap_percentage)
 
-# Divide the image into patches
-patches = divide_into_patches(image, overlap_percentage=overlap_percentage)
+# Step 3: Get global properties and determine kernel size
+global_properties = get_kernel_patch_sizes(input_image)
+kernel_size = global_properties['kernel_size']
+patch_size = global_properties['patch_size']
 
-# Initialize a list to store local variances
-local_variances = []
+# Step 4: Generate dynamic kernels for each patch
+kernels = dynamic_kernel_selection(patches, kernel_size)
 
-# Compute local variance for each patch and store it
-for i, patch in enumerate(patches):
-    _, local_variance, _ = get_properties(patch)
-    local_variances.append(local_variance)
+# Step 5: Reconstruct the image using the patches and kernels
+reconstructed_image = image_reconstruction(input_image.shape, patches, kernels, patch_size, overlap_percentage)
 
-# Calculate range, mean, and median of local variances
-variance_range = np.ptp(local_variances)  # Range = max - min
-variance_mean = np.mean(local_variances)
-variance_median = np.median(local_variances)
+# Step 6: Display the results
+plt.figure(figsize=(12, 6))
 
-# Display the range, mean, and median of the local variances
-print(f"Range of Local Variances: {variance_range:.4f}")
-print(f"Mean of Local Variances: {variance_mean:.4f}")
-print(f"Median of Local Variances: {variance_median:.4f}")
+# Original Image
+plt.subplot(1, 2, 1)
+plt.imshow(input_image, cmap='gray')
+plt.title('Original Image')
+plt.axis('off')
 
-# Now let's also visualize which kernel has been chosen for each patch
-for i, patch in enumerate(patches):
-    # Get the kernel for the current patch
-    _, local_variance, _ = get_properties(patch)
-    
-    # Determine which kernel to use for the current patch
-    kernel = dynamic_local_kernel_starting_point(patch, kernel_size=(3, 3))  # Example for kernel size 3x3
+# Reconstructed Image
+plt.subplot(1, 2, 2)
+plt.imshow(reconstructed_image, cmap='gray')
+plt.title('Reconstructed Deblurred Image using Optimized Kernels')
+plt.axis('off')
 
-    # Display the selected kernel
-    print(f"Patch {i+1}: Local Variance = {local_variance:.4f}, Selected Kernel:")
-    print(kernel)
-    
-    # Visualize patch and draw a red rectangle around it
-    plt.figure(figsize=(6, 6))
-    plt.imshow(image, cmap='gray')
-    plt.gca().add_patch(plt.Rectangle((i * 64, 0), 64, 64, linewidth=2, edgecolor='r', facecolor='none'))
-    plt.title(f"Patch {i+1} - Local Variance: {local_variance:.4f}")
-    plt.show()
+plt.show()
