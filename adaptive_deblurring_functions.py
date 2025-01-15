@@ -246,93 +246,83 @@ def dynamic_local_kernel_starting_point(patch, kernel_size):
         kernel_size (tuple): The kernel size as a tuple (height, width) (fixed size).
 
     Returns:
-        numpy.ndarray: A filter (kernel) starting point for high or low local variance.
-        high_variance (bool): Flag indicating high variance (True) or low variance (False).
+        tuple:
+            - kernel (numpy.ndarray): A filter (kernel) starting point for high or low local variance.
+            - variance_type (str): "high" or "low" indicating variance type.
     """
     # Calculate the local variance of the patch
     _, local_variance, _ = get_properties(patch)  # Use previously defined function to get local variance
-    #print(f'local_variance: {local_variance}')
 
     # Determine the filter based on local variance
     if local_variance > 3000:  # High variance
-
-        high_variance = True # Flag for high variance
-
+        variance_type = "high"  # Flag for high variance
         if kernel_size == (3, 3):
-            # Laplacian sharpening filter for high variance (3x3)
             kernel = np.array([[-1, -1, -1],
-                              [-1, 10, -1],
-                              [-1, -1, -1]])
+                               [-1, 10, -1],
+                               [-1, -1, -1]])  # High-pass sharpening filter (3x3)
         elif kernel_size == (5, 5):
-            # Laplacian sharpening filter for high variance (5x5)
             kernel = np.array([[0, 0, 1, 0, 0], 
                                [0, 1, 1, 1, 0], 
                                [1, 1, -4, 1, 1], 
                                [0, 1, 1, 1, 0], 
-                               [0, 0, 1, 0, 0]])
+                               [0, 0, 1, 0, 0]])  # High-pass sharpening filter (5x5)
         elif kernel_size == (7, 7):
-            # Laplacian sharpening filter for high variance (7x7)
             kernel = np.array([[0, 0, 0, 1, 0, 0, 0], 
                                [0, 1, 1, 2, 1, 1, 0], 
                                [0, 1, 1, 4, 1, 1, 0], 
                                [1, 2, 4, -12, 4, 2, 1], 
                                [0, 1, 1, 4, 1, 1, 0], 
                                [0, 1, 1, 2, 1, 1, 0], 
-                               [0, 0, 0, 1, 0, 0, 0]])
+                               [0, 0, 0, 1, 0, 0, 0]])  # High-pass sharpening filter (7x7)
     else:  # Low variance
-
-        high_variance = False # Flag for low variance
-
+        variance_type = "low"  # Flag for low variance
         if kernel_size == (3, 3):
-            # Gaussian Blur filter for low variance (3x3)
             kernel = np.array([[1, 2, 1], 
                                [2, 4, 2], 
-                               [1, 2, 1]]) / 16  # 3x3 Gaussian kernel
+                               [1, 2, 1]]) / 16  # Gaussian blur (3x3)
         elif kernel_size == (5, 5):
-            # Gaussian Blur filter for low variance (5x5)
             kernel = np.array([[1, 4, 6, 4, 1], 
                                [4, 16, 24, 16, 4], 
                                [6, 24, 36, 24, 6], 
                                [4, 16, 24, 16, 4], 
-                               [1, 4, 6, 4, 1]]) / 256  # 5x5 Gaussian kernel
+                               [1, 4, 6, 4, 1]]) / 256  # Gaussian blur (5x5)
         elif kernel_size == (7, 7):
-            # Gaussian Blur filter for low variance (7x7)
             kernel = np.array([[1, 6, 15, 20, 15, 6, 1], 
                                [6, 36, 90, 120, 90, 36, 6], 
                                [15, 90, 225, 300, 225, 90, 15],
                                 [20, 120, 300, 400, 300, 120, 20], 
                                 [15, 90, 225, 300, 225, 90, 15], 
                                 [6, 36, 90, 120, 90, 36, 6], 
-                                [1, 6, 15, 20, 15, 6, 1]]) / 1600  # 7x7 Gaussian kernel
-    
-    return kernel
+                                [1, 6, 15, 20, 15, 6, 1]]) / 1600  # Gaussian blur (7x7)
+
+    return kernel, variance_type
 
 def dynamic_kernel_selection(patches, kernel_size):
     """
-    Select a kernel dynamically for each patch based on its local variance
-    and track whether the patch is high or low variance.
+    Select kernels dynamically for each patch and return both the kernel and variance type.
 
     Args:
         patches (list of numpy.ndarray): List of 2D numpy arrays representing the image patches.
-        kernel_size (tuple): The kernel size as a tuple (height, width) (fixed size).
+        kernel_size (tuple): The kernel size as a tuple (height, width).
 
     Returns:
-        tuple: 
-            - kernels (list of numpy.ndarray): A list of 2D numpy arrays representing the kernels for each patch.
+        tuple:
+            - kernels (list of numpy.ndarray): List of 2D kernels for each patch.
+            - variance_types (list of str): List indicating "high" or "low" variance for each patch.
     """
     kernels = []
+    variance_types = []
 
     # Iterate over each patch
     for patch in patches:
-        # Use the dynamic_local_kernel_starting_point() function to select the kernel and determine variance flag
-        kernel = dynamic_local_kernel_starting_point(patch, kernel_size)
-        #print(f"current kernel: {kernel}")
+        # Use dynamic_local_kernel_starting_point to determine kernel and variance type
+        kernel, variance_type = dynamic_local_kernel_starting_point(patch, kernel_size)
+
+        # Append the kernel and variance type to the respective lists
         kernels.append(kernel)
+        variance_types.append(variance_type)
 
-        
-
-    #print(f"kernels: {kernels} and type: {type(kernels)}")
-    return kernels
+    return kernels, variance_types
 
 import numpy as np
 from scipy.signal import convolve2d
@@ -347,39 +337,111 @@ import numpy as np
 import numpy as np
 from scipy.signal import convolve2d
 
-def image_reconstruction(image_shape, patches, kernels, patch_size, overlap_percentage=50):
+def image_reconstruction(image_shape, patches, kernels, variance_types, patch_size, overlap_percentage=50):
     """
-    Reconstruct the deblurred image by applying the corresponding kernels to the patches
-    and combining the results into the full image.
+    Reconstruct the deblurred image by applying kernels to patches and blending mixed regions.
 
     Args:
         image_shape (tuple): Shape of the original image (height, width).
         patches (list of numpy.ndarray): List of 2D numpy arrays representing the patches.
-        kernels (list of numpy.ndarray): List of 2D numpy arrays representing the kernels for each patch.
+        kernels (list of numpy.ndarray): List of 2D kernels for each patch.
+        variance_types (list of str): List of variance types ("high" or "low") for each patch.
         patch_size (tuple): Tuple (height, width) representing the size of each patch.
         overlap_percentage (float): Overlap percentage between patches (default: 50%).
 
     Returns:
         numpy.ndarray: The reconstructed deblurred image.
     """
-    # Initialize the output image and a patch count array for normalization
+    # Initialize the output image and a patch count array
     output_image = np.zeros(image_shape, dtype=np.float32)
     patch_counts = np.zeros(image_shape, dtype=np.float32)
 
     # Calculate step size based on overlap percentage
     step_size = int((1 - overlap_percentage / 100) * patch_size[0])
 
-    # Validate inputs
-    if not all(isinstance(kernel, np.ndarray) and kernel.ndim == 2 for kernel in kernels):
-        raise ValueError("All kernels must be 2D NumPy arrays.")
-
     # Reconstruct the image
     patch_index = 0
     for i in range(0, image_shape[0] - patch_size[0] + 1, step_size):
         for j in range(0, image_shape[1] - patch_size[1] + 1, step_size):
-            # Get the current patch and kernel
+            # Get the current patch, kernel, and variance type
             patch = patches[patch_index]
             kernel = kernels[patch_index]
+            variance_type = variance_types[patch_index]
+            
+            mixed_kernel = 0 #number of mixed kernels applied
+            print(f"kernel[patch_index].shape: {kernels[patch_index].shape}")
+
+            if kernels[patch_index].shape == (3,3):
+                high_kernel = np.array([[-1, -1, -1],
+                               [-1, 10, -1],
+                               [-1, -1, -1]])
+                
+                low_kernel = np.array([[1, 2, 1],
+                               [2, 4, 2],
+                               [1, 2, 1]]) / 16
+            
+            elif kernels[patch_index].shape == (5,5):
+                high_kernel = np.array([[0, 0, 1, 0, 0], 
+                               [0, 1, 1, 1, 0], 
+                               [1, 1, -4, 1, 1], 
+                               [0, 1, 1, 1, 0], 
+                               [0, 0, 1, 0, 0]]) 
+                
+                low_kernel = np.array([[1, 4, 6, 4, 1], 
+                               [4, 16, 24, 16, 4], 
+                               [6, 24, 36, 24, 6], 
+                               [4, 16, 24, 16, 4], 
+                               [1, 4, 6, 4, 1]]) / 256
+            
+            elif kernels[patch_index].shape == (7,7):
+                high_kernel = kernel = np.array([[0, 0, 0, 1, 0, 0, 0], 
+                               [0, 1, 1, 2, 1, 1, 0], 
+                               [0, 1, 1, 4, 1, 1, 0], 
+                               [1, 2, 4, -12, 4, 2, 1], 
+                               [0, 1, 1, 4, 1, 1, 0], 
+                               [0, 1, 1, 2, 1, 1, 0], 
+                               [0, 0, 0, 1, 0, 0, 0]])
+                
+                low_kernel = np.array([[1, 6, 15, 20, 15, 6, 1], 
+                               [6, 36, 90, 120, 90, 36, 6], 
+                               [15, 90, 225, 300, 225, 90, 15],
+                                [20, 120, 300, 400, 300, 120, 20], 
+                                [15, 90, 225, 300, 225, 90, 15], 
+                                [6, 36, 90, 120, 90, 36, 6], 
+                                [1, 6, 15, 20, 15, 6, 1]]) / 1600
+            
+
+            # Check for overlap with a different variance type
+            overlapping_high = patch_counts[i:i + patch_size[0], j:j + patch_size[1]] > 0 #Overlapping_high checks if at least one pixel in the region corresponds to a high variance patch
+            #print(f"overlapping_high: {overlapping_high}")
+            #print(f"any overlapping high: {np.any(overlapping_high)}")
+
+            if np.any(overlapping_high) and variance_type == "low" and patch_index != 1:
+                print("Overlapping regions with mixed variance detected.")
+                print(f"any overlapping high: {np.any(overlapping_high)} and variance type: {variance_type}")
+                
+
+                # Get the high-variance kernel for overlap
+                print(f"high_kernel: {high_kernel}")
+
+                regularised_kernel = (high_kernel + kernel) / 2
+                print(f"regularised_kernel: {regularised_kernel}")
+
+                kernel = regularised_kernel
+                mixed_kernel += 1
+
+            elif np.any(overlapping_high) and variance_type == "high" and patch_index != 1:
+                # Get the low-variance kernel for overlap
+                print("Overlapping regions with mixed variance detected.")
+                
+                print(f"low_kernel: {low_kernel}")
+
+                regularised_kernel = (low_kernel + kernel) / 2
+
+                print(f"regularised_kernel: {regularised_kernel}")
+                kernel = regularised_kernel
+
+                mixed_kernel += 1
 
             # Convolve the patch with its kernel
             convolved_patch = convolve2d(patch, kernel, mode='same', boundary='symm')
@@ -388,10 +450,9 @@ def image_reconstruction(image_shape, patches, kernels, patch_size, overlap_perc
             output_image[i:i + patch_size[0], j:j + patch_size[1]] += convolved_patch
             patch_counts[i:i + patch_size[0], j:j + patch_size[1]] += 1
 
-            # Increment patch index
             patch_index += 1
 
     # Normalize the output image
     normalized_image = np.divide(output_image, patch_counts, where=(patch_counts != 0))
-
+    print(f"number of mixed kernels applied: {mixed_kernel}")
     return normalized_image
