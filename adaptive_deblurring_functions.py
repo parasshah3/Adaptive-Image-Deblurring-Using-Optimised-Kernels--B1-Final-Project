@@ -149,47 +149,50 @@ def get_properties(image):
 
     return (height, width), variance, gradient_magnitude 
 
-def kernel_library():
+def kernel_library(high_scaling_factor, gaussian_variance):
     """
     Return a dictionary of predefined kernels for various sizes and variance types.
 
     Returns:
         dict: A nested dictionary with variance types ('high', 'low') and kernel sizes as keys.
     """
+
+    def gaussian_kernel(size, variance):
+        """Generate a Gaussian kernel for a given size and variance."""
+        ax = np.linspace(-(size // 2), size // 2, size)
+        xx, yy = np.meshgrid(ax, ax)
+        gkernel = np.exp(-(xx**2 + yy**2) / (2 * variance))
+        gkernel /= np.sum(gkernel)
+        #print(f"Gaussian Kernel (size={size}, variance={variance}):\n{gkernel}")
+        return gkernel
+
     return {
         (3, 3): {
             "high": np.array([[-1, -1, -1], 
-                              [-1, 16, -1], 
-                              [-1, -1, -1]]),
-            "low": np.array([[1, 2, 1], [2, 4, 2], [1, 2, 1]]) / 16,
+                              [-1, 8 * high_scaling_factor, -1], 
+                              [-1, -1, -1]]),  # 3x3 High-pass filter
+
+            "low": gaussian_kernel(3, gaussian_variance),  # Gaussian blur
         },
         (5, 5): {
-            "high": np.array([[0, 0, 1, 0, 0], 
-                              [0, 1, 1, 1, 0], 
-                              [1, 1, -4, 1, 1], 
-                              [0, 1, 1, 1, 0], 
-                              [0, 0, 1, 0, 0]]),
-            "low": np.array([[1, 4, 6, 4, 1], 
-                             [4, 16, 24, 16, 4], 
-                             [6, 24, 36, 24, 6], 
-                             [4, 16, 24, 16, 4], 
-                             [1, 4, 6, 4, 1]]) / 256,
+            "high": np.array([[-1, -1, -1, -1, -1],
+                              [-1,  1,  2 * high_scaling_factor,  1, -1],
+                              [-1,  2 * high_scaling_factor,  4 * high_scaling_factor,  2 * high_scaling_factor, -1],
+                              [-1,  1,  2 * high_scaling_factor,  1, -1],
+                              [-1, -1, -1, -1, -1]]),  # 5x5 High-pass filter
+
+            "low": gaussian_kernel(5, gaussian_variance),  # Gaussian blur
         },
         (7, 7): {
-            "high": np.array([[0, 0, 0, 1, 0, 0, 0], 
-                              [0, 1, 1, 2, 1, 1, 0], 
-                              [0, 1, 1, 4, 1, 1, 0], 
-                              [1, 2, 4, -12, 4, 2, 1], 
-                              [0, 1, 1, 4, 1, 1, 0], 
-                              [0, 1, 1, 2, 1, 1, 0], 
-                              [0, 0, 0, 1, 0, 0, 0]]),
-            "low": np.array([[1, 6, 15, 20, 15, 6, 1], 
-                             [6, 36, 90, 120, 90, 36, 6], 
-                             [15, 90, 225, 300, 225, 90, 15],
-                             [20, 120, 300, 400, 300, 120, 20], 
-                             [15, 90, 225, 300, 225, 90, 15], 
-                             [6, 36, 90, 120, 90, 36, 6], 
-                             [1, 6, 15, 20, 15, 6, 1]]) / 1600,
+            "high": np.array([[-1, -1, -1, -1, -1, -1, -1],
+                              [-1,  0,  1,  1,  1,  0, -1],
+                              [-1,  1,  2 * high_scaling_factor,  2 * high_scaling_factor,  2 * high_scaling_factor,  1, -1],
+                              [-1,  1,  2 * high_scaling_factor, 16 * high_scaling_factor,  2 * high_scaling_factor,  1, -1],
+                              [-1,  1,  2 * high_scaling_factor,  2 * high_scaling_factor,  2 * high_scaling_factor,  1, -1],
+                              [-1,  0,  1,  1,  1,  0, -1],
+                              [-1, -1, -1, -1, -1, -1, -1]]),  # 7x7 High-pass filter
+
+            "low": gaussian_kernel(7, gaussian_variance),  # Gaussian blur
         },
     }
 
@@ -280,7 +283,22 @@ def divide_into_patches(image, overlap_percentage=50):
 
 import numpy as np
 
-def dynamic_local_kernel_starting_point(patch, kernel_size):
+def get_low_to_high_variance_threshold(patches):
+    
+    local_variances = []
+
+    for patch in patches:
+        _, local_variance, _ = get_properties(patch)
+        local_variances.append(local_variance)
+    
+    #Low to high variance threshold is the UQ of local_variances
+    low_to_high_variance_threshold = np.percentile(local_variances, 75)
+    #print(f"Low to High Variance Threshold: {low_to_high_variance_threshold}")
+
+    return low_to_high_variance_threshold
+       
+
+def dynamic_local_kernel_starting_point(patch, kernel_size, variance_threshold, high_scaling_factor, gaussian_variance):
     """
     Return a filter (kernel) starting point for a given patch based on its local variance
     and the specified kernel size.
@@ -294,15 +312,16 @@ def dynamic_local_kernel_starting_point(patch, kernel_size):
             - kernel (numpy.ndarray): A filter (kernel) starting point for high or low local variance.
             - variance_type (str): "high" or "low" indicating variance type.
     """
-    kernels = kernel_library()  # Fetch kernel dictionary
+    kernels = kernel_library(high_scaling_factor,gaussian_variance)  # Fetch kernel dictionary
     _, local_variance, _ = get_properties(patch)  # Get variance
 
-    variance_type = "high" if local_variance > 3000 else "low"
+
+    variance_type = "high" if local_variance > variance_threshold else "low"
     kernel = kernels[kernel_size][variance_type]
 
     return kernel, variance_type
 
-def dynamic_kernel_selection(patches, kernel_size):
+def dynamic_kernel_selection(patches, kernel_size, variance_threshold, high_scaling_factor, gaussian_variance):
     """
     Select kernels dynamically for each patch and return both the kernel and variance type.
 
@@ -321,7 +340,7 @@ def dynamic_kernel_selection(patches, kernel_size):
     # Iterate over each patch
     for patch in patches:
         # Use dynamic_local_kernel_starting_point to determine kernel and variance type
-        kernel, variance_type = dynamic_local_kernel_starting_point(patch, kernel_size)
+        kernel, variance_type = dynamic_local_kernel_starting_point(patch, kernel_size, variance_threshold, high_scaling_factor, gaussian_variance)
 
         # Append the kernel and variance type to the respective lists
         kernels.append(kernel)
@@ -342,7 +361,9 @@ import numpy as np
 import numpy as np
 from scipy.signal import convolve2d
 
-def image_reconstruction_og(image_shape, patches, kernels, variance_types, patch_size, overlap_percentage=50):
+
+
+def image_reconstruction(image_shape, patches, kernels, variance_types, patch_size, overlap_percentage, high_scaling_factor, gaussian_variance):
     """
     Reconstruct the deblurred image by applying kernels to patches and blending mixed regions.
 
@@ -361,8 +382,8 @@ def image_reconstruction_og(image_shape, patches, kernels, variance_types, patch
     patch_counts = np.zeros(image_shape, dtype=np.float32)
     step_size = int((1 - overlap_percentage / 100) * patch_size[0])
 
-    kernels_dict = kernel_library()  # Fetch kernel dictionary
-
+    kernels_dict = kernel_library(high_scaling_factor, gaussian_variance)  # Fetch kernel dictionary
+    
     patch_index = 0
     for i in range(0, image_shape[0] - patch_size[0] + 1, step_size):
         for j in range(0, image_shape[1] - patch_size[1] + 1, step_size):
@@ -370,56 +391,10 @@ def image_reconstruction_og(image_shape, patches, kernels, variance_types, patch
             kernel = kernels[patch_index]
             variance_type = variance_types[patch_index]
 
-            # Use kernel.shape to determine the kernel size
-            kernel_size = kernel.shape
-
-            overlapping_high = patch_counts[i:i + patch_size[0], j:j + patch_size[1]] > 0
-
-            if np.any(overlapping_high):
-                other_type = "low" if variance_type == "high" and patch_index != 0 else "high"
-                regularised_kernel = (kernel + kernels_dict[kernel_size][other_type]) / 2
-                kernel = regularised_kernel
-
-            convolved_patch = convolve2d(patch, kernel, mode="same", boundary="symm")
-            output_image[i:i + patch_size[0], j:j + patch_size[1]] += convolved_patch
-            patch_counts[i:i + patch_size[0], j:j + patch_size[1]] += 1
-            patch_index += 1
-
-    return np.divide(output_image, patch_counts, where=patch_counts != 0)
-
-def image_reconstruction(image_shape, patches, kernels, variance_types, patch_size, overlap_percentage=50):
-    """
-    Reconstruct the deblurred image by applying kernels to patches and blending mixed regions.
-
-    Args:
-        image_shape (tuple): Shape of the original image (height, width).
-        patches (list of numpy.ndarray): List of 2D numpy arrays representing the patches.
-        kernels (list of numpy.ndarray): List of 2D kernels for each patch.
-        variance_types (list of str): List of variance types ("high" or "low") for each patch.
-        patch_size (tuple): Tuple (height, width) representing the size of each patch.
-        overlap_percentage (float): Overlap percentage between patches (default: 50%).
-
-    Returns:
-        numpy.ndarray: The reconstructed deblurred image.
-    """
-    output_image = np.zeros(image_shape, dtype=np.float32)
-    patch_counts = np.zeros(image_shape, dtype=np.float32)
-    step_size = int((1 - overlap_percentage / 100) * patch_size[0])
-
-    kernels_dict = kernel_library()  # Fetch kernel dictionary
-
-    patch_index = 0
-    for i in range(0, image_shape[0] - patch_size[0] + 1, step_size):
-        for j in range(0, image_shape[1] - patch_size[1] + 1, step_size):
-            patch = patches[patch_index]
-            kernel = kernels[patch_index]
-            variance_type = variance_types[patch_index]
 
             # Skip kernel regularisation for the very first patch (top-left corner)
-            if patch_index == 0: 
-                print(f"Skipping kernel regularisation for the very first patch: patch_index={patch_index} and setting kernel manually.")
-                print(f"Kernel: {kernel}")
-                kernel = (kernel + kernels_dict[kernel.shape]['high']) / 2
+            if patch_index == 0:
+                print(f"Skipping kernel regularisation for the very first patch: patch_index={patch_index}")
             else:
                 # Check for overlap with a different variance type
                 overlapping_high = patch_counts[i:i + patch_size[0], j:j + patch_size[1]] > 0
@@ -436,3 +411,5 @@ def image_reconstruction(image_shape, patches, kernels, variance_types, patch_si
             patch_index += 1
 
     return np.divide(output_image, patch_counts, where=patch_counts != 0)
+
+
