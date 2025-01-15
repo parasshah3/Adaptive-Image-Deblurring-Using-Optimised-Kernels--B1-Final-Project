@@ -342,7 +342,7 @@ import numpy as np
 import numpy as np
 from scipy.signal import convolve2d
 
-def image_reconstruction(image_shape, patches, kernels, variance_types, patch_size, overlap_percentage=50):
+def image_reconstruction_og(image_shape, patches, kernels, variance_types, patch_size, overlap_percentage=50):
     """
     Reconstruct the deblurred image by applying kernels to patches and blending mixed regions.
 
@@ -376,10 +376,60 @@ def image_reconstruction(image_shape, patches, kernels, variance_types, patch_si
             overlapping_high = patch_counts[i:i + patch_size[0], j:j + patch_size[1]] > 0
 
             if np.any(overlapping_high):
-                other_type = "low" if variance_type == "high" and patch_index != 1 else "high"
+                other_type = "low" if variance_type == "high" and patch_index != 0 else "high"
                 regularised_kernel = (kernel + kernels_dict[kernel_size][other_type]) / 2
                 kernel = regularised_kernel
 
+            convolved_patch = convolve2d(patch, kernel, mode="same", boundary="symm")
+            output_image[i:i + patch_size[0], j:j + patch_size[1]] += convolved_patch
+            patch_counts[i:i + patch_size[0], j:j + patch_size[1]] += 1
+            patch_index += 1
+
+    return np.divide(output_image, patch_counts, where=patch_counts != 0)
+
+def image_reconstruction(image_shape, patches, kernels, variance_types, patch_size, overlap_percentage=50):
+    """
+    Reconstruct the deblurred image by applying kernels to patches and blending mixed regions.
+
+    Args:
+        image_shape (tuple): Shape of the original image (height, width).
+        patches (list of numpy.ndarray): List of 2D numpy arrays representing the patches.
+        kernels (list of numpy.ndarray): List of 2D kernels for each patch.
+        variance_types (list of str): List of variance types ("high" or "low") for each patch.
+        patch_size (tuple): Tuple (height, width) representing the size of each patch.
+        overlap_percentage (float): Overlap percentage between patches (default: 50%).
+
+    Returns:
+        numpy.ndarray: The reconstructed deblurred image.
+    """
+    output_image = np.zeros(image_shape, dtype=np.float32)
+    patch_counts = np.zeros(image_shape, dtype=np.float32)
+    step_size = int((1 - overlap_percentage / 100) * patch_size[0])
+
+    kernels_dict = kernel_library()  # Fetch kernel dictionary
+
+    patch_index = 0
+    for i in range(0, image_shape[0] - patch_size[0] + 1, step_size):
+        for j in range(0, image_shape[1] - patch_size[1] + 1, step_size):
+            patch = patches[patch_index]
+            kernel = kernels[patch_index]
+            variance_type = variance_types[patch_index]
+
+            # Skip kernel regularisation for the very first patch (top-left corner)
+            if patch_index == 0: 
+                print(f"Skipping kernel regularisation for the very first patch: patch_index={patch_index} and setting kernel manually.")
+                print(f"Kernel: {kernel}")
+                kernel = (kernel + kernels_dict[kernel.shape]['high']) / 2
+            else:
+                # Check for overlap with a different variance type
+                overlapping_high = patch_counts[i:i + patch_size[0], j:j + patch_size[1]] > 0
+
+                if np.any(overlapping_high):
+                    other_type = "low" if variance_type == "high" else "high"
+                    regularised_kernel = (kernel + kernels_dict[kernel.shape][other_type]) / 2
+                    kernel = regularised_kernel
+
+            # Convolve the patch with its kernel
             convolved_patch = convolve2d(patch, kernel, mode="same", boundary="symm")
             output_image[i:i + patch_size[0], j:j + patch_size[1]] += convolved_patch
             patch_counts[i:i + patch_size[0], j:j + patch_size[1]] += 1

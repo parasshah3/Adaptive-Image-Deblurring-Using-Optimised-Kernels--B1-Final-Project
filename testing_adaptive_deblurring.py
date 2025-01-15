@@ -46,7 +46,7 @@ plt.axis("off")
 # Reconstructed Image
 plt.subplot(1, 2, 2)
 plt.imshow(reconstructed_image, cmap="gray")
-plt.title("Reconstructed Image with No Kernel Regularisation") 
+plt.title("Reconstructed Image with Kernel Regularisation") 
 plt.axis("off")
 
 # Show the results
