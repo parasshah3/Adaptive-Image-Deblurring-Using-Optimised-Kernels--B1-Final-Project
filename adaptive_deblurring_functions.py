@@ -546,8 +546,8 @@ def optimise_parameters(input_image, reference_image, gaussian_variance, overlap
     initial_guess = [0.3, 1.6]
 
     # Bounds for the parameters (ensure realistic values)
-    bounds = [(0.2, 0.6),  # Brightness factor range
-              (0.8, 2.5)]  # High scaling factor range
+    bounds = [(0.25, 0.7),  # Brightness factor range
+              (0.9, 2.5)]  # High scaling factor range
 
     # Minimise the objective function
     result = minimize(
@@ -558,8 +558,8 @@ def optimise_parameters(input_image, reference_image, gaussian_variance, overlap
         method='L-BFGS-B',
         options={
         'disp': True,       # Display progress
-        'maxiter': 5,      # Cap the number of iterations (adjust as needed)
-        'ftol': 1e-5 
+        'maxiter': 500,      # Cap the number of iterations (adjust as needed)
+        'ftol': 1e-6 
         }
     )
 

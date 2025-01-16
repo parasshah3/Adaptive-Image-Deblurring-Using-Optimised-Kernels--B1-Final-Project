@@ -2,7 +2,7 @@ import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 
-
+from adaptive_deblurring_functions import add_noise
 
 # Example Usage
 if __name__ == "__main__":
@@ -12,7 +12,7 @@ if __name__ == "__main__":
     img_array = np.array(img)
 
     # Add Gaussian noise
-    gaussian_noisy_img = add_noise(img_array, noise_type="gaussian", mean=0, var=0.01)
+    gaussian_noisy_img = add_noise(img_array, noise_type="gaussian", mean=0, var=0.1)
 
     # Add Salt-and-Pepper noise
     sp_noisy_img = add_noise(img_array, noise_type="salt_and_pepper", salt_prob=0.05, pepper_prob=0.05)
