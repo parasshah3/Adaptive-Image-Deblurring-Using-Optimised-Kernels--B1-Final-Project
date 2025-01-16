@@ -260,7 +260,7 @@ def divide_into_patches(image, overlap_percentage=75):
 
     # Calculate step size based on overlap percentage
     step_size = int((1 - overlap_percentage / 100) * patch_size[0])  # calculate step size based on overlap
-    print(f"Step size: {step_size}")
+    #print(f"Step size: {step_size}")
 
     patches = []
     height, width = image.shape
@@ -271,7 +271,7 @@ def divide_into_patches(image, overlap_percentage=75):
     expected_num_patches = expected_num_patches_x * expected_num_patches_y
 
     # Print expected number of patches for verification
-    print(f"Expected number of patches: {expected_num_patches}")
+    #print(f"Expected number of patches: {expected_num_patches}")
 
     # Iterate over the image to extract patches
     for i in range(0, height - patch_size[0] + 1, step_size):
@@ -299,7 +299,7 @@ def get_low_to_high_variance_threshold(patches):
         local_variances.append(local_variance)
     
     #Low to high variance threshold is the UQ of local_variances
-    low_to_high_variance_threshold = np.percentile(local_variances, 50)
+    low_to_high_variance_threshold = np.percentile(local_variances, 75)
     #print(f"Low to High Variance Threshold: {low_to_high_variance_threshold}")
 
     return low_to_high_variance_threshold
@@ -398,12 +398,12 @@ def image_reconstruction(image_shape, patches, kernels, variance_types, patch_si
             patch = patches[patch_index]
             kernel = kernels[patch_index]
             variance_type = variance_types[patch_index]
-            print(f"variance_type: {variance_type}")
+            #print(f"variance_type: {variance_type}")
 
 
             # Skip kernel regularisation for the very first patch (top-left corner)
             if patch_index == 0:
-                print(f"Skipping kernel regularisation for the very first patch: patch_index={patch_index}")
+                #print(f"Skipping kernel regularisation for the very first patch: patch_index={patch_index}")
                 
                 other_type = not(variance_type) #other_type is the opposite of variance_type
             else:
@@ -417,22 +417,22 @@ def image_reconstruction(image_shape, patches, kernels, variance_types, patch_si
 
                     if overlapping_region_type != variance_type:
                         # If current patch and overlapping region are of opposite types, regularise the kernel
-                        print(f"Regularisation applied for patch {patch_index} due to mixed variance overlap.")
+                        #print(f"Regularisation applied for patch {patch_index} due to mixed variance overlap.")
                         other_type = "low" if variance_type == "high" else "high"
                         regularised_kernel = (kernel + kernels_dict[kernel.shape][other_type]) / 2
                         kernel = regularised_kernel
-                    else:
+                    #else:
                         # If current patch and overlapping region are of the same type, retain the original kernel
-                        print(f"No regularisation for patch {patch_index}. Kernel type: {variance_type}.")
+                        #print(f"No regularisation for patch {patch_index}. Kernel type: {variance_type}.")
                 else:
                     # No overlap; retain the original kernel
                     print(f"No overlap for patch {patch_index}. Kernel type: {variance_type}.")
 
             # Convolve the patch with its kernel
             #if patch index is divisible by 50, print the kernel
-            if patch_index % 50 == 0:
-                print(f"kernel: {kernel}")
-                print(f"Low kernel: {kernels_dict[kernel.shape]['low']}")
+            #if patch_index % 50 == 0:
+               # print(f"kernel: {kernel}")
+                #print(f"Low kernel: {kernels_dict[kernel.shape]['low']}")
 
             convolved_patch = convolve2d(patch, kernel, mode="same", boundary="symm")
             output_image[i:i + patch_size[0], j:j + patch_size[1]] += convolved_patch
@@ -445,50 +445,6 @@ def image_reconstruction(image_shape, patches, kernels, variance_types, patch_si
     return final_image
 
 
-def reconstruct_image(input_image, gaussian_variance, high_scaling_factor, brightness_factor, overlap_percentage):
-    """
-    Reconstruct an image using adaptive deblurring with adjustable parameters.
-
-    Args:
-        input_image (numpy.ndarray): 2D grayscale image as input.
-        gaussian_variance (float): Variance for the Gaussian blur kernel.
-        high_scaling_factor (float): Scaling factor for high-pass kernels.
-        brightness_factor (float): Brightness adjustment for the low-pass kernel.
-        overlap_percentage (float): Overlap percentage between patches.
-
-    Returns:
-        numpy.ndarray: The reconstructed image.
-    """
-    # Get kernel size and patch size
-    global_properties = get_kernel_patch_sizes(input_image)
-    kernel_size = global_properties["kernel_size"]
-    patch_size = global_properties["patch_size"]
-
-    # Divide the image into patches
-    patches = divide_into_patches(input_image, overlap_percentage)
-
-    # Get the variance threshold for kernel selection
-    threshold = get_low_to_high_variance_threshold(patches)
-
-    # Dynamically select kernels for each patch
-    kernels, variance_types = dynamic_kernel_selection(
-        patches, kernel_size, threshold, high_scaling_factor, gaussian_variance, brightness_factor
-    )
-
-    # Reconstruct the image from patches
-    reconstructed_image = image_reconstruction(
-        image_shape=input_image.shape,
-        patches=patches,
-        kernels=kernels,
-        variance_types=variance_types,
-        patch_size=patch_size,
-        overlap_percentage=overlap_percentage,
-        high_scaling_factor=high_scaling_factor,
-        gaussian_variance=gaussian_variance,
-        brightness_factor=brightness_factor
-    )
-
-    return reconstructed_image
 
 def reconstruct_image(input_image, gaussian_variance, high_scaling_factor, brightness_factor, overlap_percentage):
     """
@@ -534,3 +490,127 @@ def reconstruct_image(input_image, gaussian_variance, high_scaling_factor, brigh
     )
 
     return reconstructed_image
+
+from scipy.optimize import minimize
+from sklearn.metrics import mean_squared_error
+
+def mse_objective(params, input_image, reference_image, gaussian_variance, overlap_percentage):
+    """
+    Objective function to compute the MSE between the reconstructed and reference sharp image.
+
+    Args:
+        params (list): List containing [brightness_factor, high_scaling_factor].
+        input_image (numpy.ndarray): The blurry input image.
+        reference_image (numpy.ndarray): The sharp reference image.
+        gaussian_variance (float): Variance for the Gaussian blur kernel.
+        overlap_percentage (float): Overlap percentage between patches.
+
+    Returns:
+        float: Mean squared error (MSE) between the reconstructed image and the reference image.
+    """
+    brightness_factor, high_scaling_factor = params
+
+    print(f"optimising...")
+
+    # Reconstruct the image
+    reconstructed_image = reconstruct_image(
+        input_image=input_image,
+        gaussian_variance=gaussian_variance,
+        high_scaling_factor=high_scaling_factor,
+        brightness_factor=brightness_factor,
+        overlap_percentage=overlap_percentage,
+    )
+
+    # Calculate the MSE between the reconstructed image and the reference image
+    mse = mean_squared_error(reference_image.flatten(), reconstructed_image.flatten())
+
+    print(f"Current MSE: {mse:.4f}, Brightness Factor: {brightness_factor:.4f}, High Scaling Factor: {high_scaling_factor:.4f}")
+
+    return mse
+
+
+def optimise_parameters(input_image, reference_image, gaussian_variance, overlap_percentage):
+    """
+    Optimises the brightness factor and high scaling factor to minimise the MSE.
+
+    Args:
+        input_image (numpy.ndarray): The blurry input image.
+        reference_image (numpy.ndarray): The sharp reference image.
+        gaussian_variance (float): Variance for the Gaussian blur kernel.
+        overlap_percentage (float): Overlap percentage between patches.
+
+    Returns:
+        dict: Optimised parameters and corresponding MSE.
+    """
+    # Initial guesses for brightness_factor and high_scaling_factor
+    initial_guess = [0.3, 1.6]
+
+    # Bounds for the parameters (ensure realistic values)
+    bounds = [(0.2, 0.6),  # Brightness factor range
+              (0.8, 2.5)]  # High scaling factor range
+
+    # Minimise the objective function
+    result = minimize(
+        mse_objective,
+        x0=initial_guess,
+        args=(input_image, reference_image, gaussian_variance, overlap_percentage),
+        bounds=bounds,
+        method='L-BFGS-B',
+        options={
+        'disp': True,       # Display progress
+        'maxiter': 5,      # Cap the number of iterations (adjust as needed)
+        'ftol': 1e-5 
+        }
+    )
+
+    return {
+        "optimised_params": result.x,
+        "minimum_mse": result.fun,
+        "success": result.success,
+        "message": result.message,
+    }
+
+
+def add_noise(image, noise_type="gaussian", mean=0, var=0.01, salt_prob=0.05, pepper_prob=0.05):
+    """
+    Add noise to an image.
+
+    Args:
+        image (numpy.ndarray): Input image (grayscale or RGB).
+        noise_type (str): Type of noise ("gaussian", "salt_and_pepper", "poisson", or "speckle").
+        mean (float): Mean for Gaussian noise.
+        var (float): Variance for Gaussian noise.
+        salt_prob (float): Probability of salt noise for "salt_and_pepper".
+        pepper_prob (float): Probability of pepper noise for "salt_and_pepper".
+
+    Returns:
+        numpy.ndarray: Noisy image.
+    """
+    noisy_image = np.copy(image)
+
+    if noise_type == "gaussian":
+        # Gaussian noise
+        sigma = var**0.5
+        gaussian_noise = np.random.normal(mean, sigma, image.shape)
+        noisy_image = image + gaussian_noise
+        noisy_image = np.clip(noisy_image, 0, 255)
+
+    elif noise_type == "salt_and_pepper":
+        # Salt and pepper noise
+        salt = np.random.rand(*image.shape) < salt_prob
+        pepper = np.random.rand(*image.shape) < pepper_prob
+        noisy_image[salt] = 255
+        noisy_image[pepper] = 0
+
+    elif noise_type == "poisson":
+        # Poisson noise
+        noisy_image = np.random.poisson(image).astype(np.float32)
+        noisy_image = np.clip(noisy_image, 0, 255)
+
+    elif noise_type == "speckle":
+        # Speckle noise
+        speckle_noise = np.random.normal(mean, var**0.5, image.shape)
+        noisy_image = image + image * speckle_noise
+        noisy_image = np.clip(noisy_image, 0, 255)
+
+    return noisy_image
