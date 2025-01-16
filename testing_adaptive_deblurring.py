@@ -10,7 +10,7 @@ from adaptive_deblurring_functions import (
 )
 
 # Load the image
-image_path = "/Users/paras/Desktop/B1 Final Project/cameraman.tif"
+image_path = "/Users/paras/Desktop/B1 Final Project/mandril_color.tif"
 image = load_image(image_path)
 
 # Divide into patches
@@ -45,6 +45,8 @@ reconstructed_image = image_reconstruction(
     high_scaling_factor=scaling_factor,
     gaussian_variance=gaussian_variance,
 )
+
+print(f"Reconstructed image: {reconstructed_image}")
 
 # Display the images
 plt.figure(figsize=(12, 6))

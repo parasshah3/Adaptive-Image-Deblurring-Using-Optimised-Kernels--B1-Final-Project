@@ -10,7 +10,7 @@ from adaptive_deblurring_functions import (
 )
 
 # Load the image
-image_path = "/Users/paras/Desktop/B1 Final Project/sharp_building.JPG"
+image_path = "/Users/paras/Desktop/B1 Final Project/mandril_color.tif"
 image = load_image(image_path)
 
 # Divide into patches

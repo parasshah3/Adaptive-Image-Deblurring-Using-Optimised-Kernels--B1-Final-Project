@@ -149,7 +149,7 @@ def get_properties(image):
 
     return (height, width), variance, gradient_magnitude 
 
-def kernel_library(high_scaling_factor, gaussian_variance):
+def kernel_library(high_scaling_factor, gaussian_variance, brightness_factor=0.35):
     """
     Return a dictionary of predefined kernels for various sizes and variance types.
 
@@ -161,7 +161,7 @@ def kernel_library(high_scaling_factor, gaussian_variance):
         """Generate a Gaussian kernel for a given size and variance."""
         ax = np.linspace(-(size // 2), size // 2, size)
         xx, yy = np.meshgrid(ax, ax)
-        gkernel = np.exp(-(xx**2 + yy**2) / (2 * variance))
+        gkernel = np.exp(-(xx**2 + yy**2) / (0.01 * variance))
         gkernel /= np.sum(gkernel)
         #print(f"Gaussian Kernel (size={size}, variance={variance}):\n{gkernel}")
         return gkernel
@@ -172,7 +172,14 @@ def kernel_library(high_scaling_factor, gaussian_variance):
                               [-1, 8 * high_scaling_factor, -1], 
                               [-1, -1, -1]]),  # 3x3 High-pass filter
 
-            "low": gaussian_kernel(3, gaussian_variance),  # Gaussian blur
+            #"low": gaussian_kernel(3, gaussian_variance),  # Gaussian blur
+            "low": (brightness_factor) * np.array([
+                                        [1, 2, 1],
+                                        [2, 4, 2],
+                                        [1, 2, 1]
+                                    ]),  # Gaussian blur
+            
+
         },
         (5, 5): {
             "high": np.array([[-1, -1, -1, -1, -1],
@@ -361,6 +368,7 @@ import numpy as np
 import numpy as np
 from scipy.signal import convolve2d
 
+from skimage import exposure
 
 
 def image_reconstruction(image_shape, patches, kernels, variance_types, patch_size, overlap_percentage, high_scaling_factor, gaussian_variance):
@@ -430,7 +438,10 @@ def image_reconstruction(image_shape, patches, kernels, variance_types, patch_si
             output_image[i:i + patch_size[0], j:j + patch_size[1]] += convolved_patch
             patch_counts[i:i + patch_size[0], j:j + patch_size[1]] += 1
             patch_index += 1
+        
+    final_image = np.divide(output_image, patch_counts, where=patch_counts != 0)
+    #equalised_image = exposure.equalize_hist(final_image)
 
-    return np.divide(output_image, patch_counts, where=patch_counts != 0)
+    return final_image
 
 
