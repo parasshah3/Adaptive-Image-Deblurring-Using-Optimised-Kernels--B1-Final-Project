@@ -9,14 +9,15 @@ sharp_image_path = "/Users/paras/Desktop/B1 Final Project/pirate.tif"
 sharp_reference = load_image(sharp_image_path)
 
 # Add noise to the sharp image to simulate a blurry image
-noise_type = "poisson"  # Choose from "gaussian", "salt_and_pepper", "poisson", or "speckle"
+noise_type = "speckle"  # Choose from "gaussian", "salt_and_pepper", "poisson", or "speckle"
 mean = 0  # Mean for Gaussian noise
 variance = 0.01  # Variance for Gaussian noise
 blurry_image = add_noise(sharp_reference, noise_type=noise_type, mean=mean, var=variance)
 
 # Parameters for Gaussian variance and overlap percentage
 gaussian_variance = 1.0  # Adjust as needed
-overlap_percentage = 75  # Overlap percentage for patches
+overlap_percentage = 90
+  # Overlap percentage for patches
 
 # Perform optimisation
 optimisation_results = optimise_parameters(
