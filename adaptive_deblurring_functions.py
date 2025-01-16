@@ -543,7 +543,7 @@ def optimise_parameters(input_image, reference_image, gaussian_variance, overlap
         dict: Optimised parameters and corresponding MSE.
     """
     # Initial guesses for brightness_factor and high_scaling_factor
-    initial_guess = [0.3, 1.6]
+    initial_guess = [0.4, 1.7]
 
     # Bounds for the parameters (ensure realistic values)
     bounds = [(0.25, 0.7),  # Brightness factor range

@@ -751,7 +751,7 @@ def reconstruct_image_extended(input_image, gaussian_variance, high_scaling_fact
     return np.divide(output_image, patch_counts, where=patch_counts != 0)
 
 # MSE Objective
-def mse_objective(params, input_image, reference_image, gaussian_variance, overlap_percentage):
+def mse_objective_extended(params, input_image, reference_image, gaussian_variance, overlap_percentage):
     """
     Compute the MSE between reconstructed and reference images.
     """
@@ -774,7 +774,7 @@ def gradient_descent_optimisation(input_image, reference_image, gaussian_varianc
 
     for iteration in range(max_iterations):
         # Compute current MSE
-        current_mse = mse_objective(params, input_image, reference_image, gaussian_variance, overlap_percentage)
+        current_mse = mse_objective_extended(params, input_image, reference_image, gaussian_variance, overlap_percentage)
 
         # Check for divergence or NaN
         if np.isnan(current_mse) or current_mse > 1e12:
@@ -787,7 +787,7 @@ def gradient_descent_optimisation(input_image, reference_image, gaussian_varianc
         for i in range(len(params)):
             params_step = params.copy()
             params_step[i] += epsilon
-            gradients[i] = (mse_objective(params_step, input_image, reference_image, gaussian_variance, overlap_percentage)
+            gradients[i] = (mse_objective_extended(params_step, input_image, reference_image, gaussian_variance, overlap_percentage)
                             - current_mse) / epsilon
 
         # Update parameters
