@@ -236,7 +236,7 @@ def get_kernel_patch_sizes(image):
         "resolution": resolution,
     }
 
-def divide_into_patches(image, overlap_percentage=50):
+def divide_into_patches(image, overlap_percentage=75):
     """
     Divides the input image into patches using a sliding window approach with overlap.
     
@@ -292,7 +292,7 @@ def get_low_to_high_variance_threshold(patches):
         local_variances.append(local_variance)
     
     #Low to high variance threshold is the UQ of local_variances
-    low_to_high_variance_threshold = np.percentile(local_variances, 75)
+    low_to_high_variance_threshold = np.percentile(local_variances, 50)
     #print(f"Low to High Variance Threshold: {low_to_high_variance_threshold}")
 
     return low_to_high_variance_threshold
@@ -390,21 +390,42 @@ def image_reconstruction(image_shape, patches, kernels, variance_types, patch_si
             patch = patches[patch_index]
             kernel = kernels[patch_index]
             variance_type = variance_types[patch_index]
+            print(f"variance_type: {variance_type}")
 
 
             # Skip kernel regularisation for the very first patch (top-left corner)
             if patch_index == 0:
                 print(f"Skipping kernel regularisation for the very first patch: patch_index={patch_index}")
+                
+                other_type = not(variance_type) #other_type is the opposite of variance_type
             else:
                 # Check for overlap with a different variance type
+                # Check for overlap
                 overlapping_high = patch_counts[i:i + patch_size[0], j:j + patch_size[1]] > 0
 
                 if np.any(overlapping_high):
-                    other_type = "low" if variance_type == "high" else "high"
-                    regularised_kernel = (kernel + kernels_dict[kernel.shape][other_type]) / 2
-                    kernel = regularised_kernel
+                    # Determine the previous variance type in the overlapping region
+                    overlapping_region_type = "high" if variance_types[patch_index - 1] == "high" else "low"
+
+                    if overlapping_region_type != variance_type:
+                        # If current patch and overlapping region are of opposite types, regularise the kernel
+                        print(f"Regularisation applied for patch {patch_index} due to mixed variance overlap.")
+                        other_type = "low" if variance_type == "high" else "high"
+                        regularised_kernel = (kernel + kernels_dict[kernel.shape][other_type]) / 2
+                        kernel = regularised_kernel
+                    else:
+                        # If current patch and overlapping region are of the same type, retain the original kernel
+                        print(f"No regularisation for patch {patch_index}. Kernel type: {variance_type}.")
+                else:
+                    # No overlap; retain the original kernel
+                    print(f"No overlap for patch {patch_index}. Kernel type: {variance_type}.")
 
             # Convolve the patch with its kernel
+            #if patch index is divisible by 50, print the kernel
+            if patch_index % 50 == 0:
+                print(f"kernel: {kernel}")
+                print(f"Low kernel: {kernels_dict[kernel.shape]['low']}")
+
             convolved_patch = convolve2d(patch, kernel, mode="same", boundary="symm")
             output_image[i:i + patch_size[0], j:j + patch_size[1]] += convolved_patch
             patch_counts[i:i + patch_size[0], j:j + patch_size[1]] += 1

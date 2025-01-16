@@ -10,11 +10,11 @@ from adaptive_deblurring_functions import (
 )
 
 # Load the image
-image_path = "/Users/paras/Desktop/B1 Final Project/mandril_color.tif"
+image_path = "/Users/paras/Desktop/B1 Final Project/cameraman.tif"
 image = load_image(image_path)
 
 # Divide into patches
-overlap_percentage = 75  # Define the overlap percentage
+overlap_percentage = 90  # Define the overlap percentage
 patches = divide_into_patches(image, overlap_percentage)
 
 # Get global properties to determine patch and kernel sizes
@@ -28,8 +28,8 @@ threshold = get_low_to_high_variance_threshold(patches)
 print(f"Variance threshold: {threshold}")
 
 # Choose scaling factor and Gaussian variance
-scaling_factor = 2.0  # Adjust as needed
-gaussian_variance = 1.0  # Adjust as needed
+scaling_factor = 1.6  # Adjust as needed
+gaussian_variance = 50 # Adjust as needed
 
 # Select kernels dynamically and get their variance types
 kernels, variance_types = dynamic_kernel_selection(patches, kernel_size, threshold, scaling_factor, gaussian_variance)
