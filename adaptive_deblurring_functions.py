@@ -149,7 +149,7 @@ def get_properties(image):
 
     return (height, width), variance, gradient_magnitude 
 
-def kernel_library(high_scaling_factor, gaussian_variance, brightness_factor=0.35):
+def kernel_library(high_scaling_factor, gaussian_variance, brightness_factor):
     """
     Return a dictionary of predefined kernels for various sizes and variance types.
 
@@ -305,7 +305,7 @@ def get_low_to_high_variance_threshold(patches):
     return low_to_high_variance_threshold
        
 
-def dynamic_local_kernel_starting_point(patch, kernel_size, variance_threshold, high_scaling_factor, gaussian_variance):
+def dynamic_local_kernel_starting_point(patch, kernel_size, variance_threshold, high_scaling_factor, gaussian_variance, brightness_factor):
     """
     Return a filter (kernel) starting point for a given patch based on its local variance
     and the specified kernel size.
@@ -319,7 +319,7 @@ def dynamic_local_kernel_starting_point(patch, kernel_size, variance_threshold, 
             - kernel (numpy.ndarray): A filter (kernel) starting point for high or low local variance.
             - variance_type (str): "high" or "low" indicating variance type.
     """
-    kernels = kernel_library(high_scaling_factor,gaussian_variance)  # Fetch kernel dictionary
+    kernels = kernel_library(high_scaling_factor,gaussian_variance,brightness_factor)  # Fetch kernel dictionary
     _, local_variance, _ = get_properties(patch)  # Get variance
 
 
@@ -328,7 +328,7 @@ def dynamic_local_kernel_starting_point(patch, kernel_size, variance_threshold, 
 
     return kernel, variance_type
 
-def dynamic_kernel_selection(patches, kernel_size, variance_threshold, high_scaling_factor, gaussian_variance):
+def dynamic_kernel_selection(patches, kernel_size, variance_threshold, high_scaling_factor, gaussian_variance, brightness_factor):
     """
     Select kernels dynamically for each patch and return both the kernel and variance type.
 
@@ -347,7 +347,7 @@ def dynamic_kernel_selection(patches, kernel_size, variance_threshold, high_scal
     # Iterate over each patch
     for patch in patches:
         # Use dynamic_local_kernel_starting_point to determine kernel and variance type
-        kernel, variance_type = dynamic_local_kernel_starting_point(patch, kernel_size, variance_threshold, high_scaling_factor, gaussian_variance)
+        kernel, variance_type = dynamic_local_kernel_starting_point(patch, kernel_size, variance_threshold, high_scaling_factor, gaussian_variance, brightness_factor)
 
         # Append the kernel and variance type to the respective lists
         kernels.append(kernel)
@@ -371,7 +371,7 @@ from scipy.signal import convolve2d
 from skimage import exposure
 
 
-def image_reconstruction(image_shape, patches, kernels, variance_types, patch_size, overlap_percentage, high_scaling_factor, gaussian_variance):
+def image_reconstruction(image_shape, patches, kernels, variance_types, patch_size, overlap_percentage, high_scaling_factor, gaussian_variance, brightness_factor):
     """
     Reconstruct the deblurred image by applying kernels to patches and blending mixed regions.
 
@@ -390,7 +390,7 @@ def image_reconstruction(image_shape, patches, kernels, variance_types, patch_si
     patch_counts = np.zeros(image_shape, dtype=np.float32)
     step_size = int((1 - overlap_percentage / 100) * patch_size[0])
 
-    kernels_dict = kernel_library(high_scaling_factor, gaussian_variance)  # Fetch kernel dictionary
+    kernels_dict = kernel_library(high_scaling_factor, gaussian_variance,brightness_factor)  # Fetch kernel dictionary
     
     patch_index = 0
     for i in range(0, image_shape[0] - patch_size[0] + 1, step_size):
@@ -445,3 +445,92 @@ def image_reconstruction(image_shape, patches, kernels, variance_types, patch_si
     return final_image
 
 
+def reconstruct_image(input_image, gaussian_variance, high_scaling_factor, brightness_factor, overlap_percentage):
+    """
+    Reconstruct an image using adaptive deblurring with adjustable parameters.
+
+    Args:
+        input_image (numpy.ndarray): 2D grayscale image as input.
+        gaussian_variance (float): Variance for the Gaussian blur kernel.
+        high_scaling_factor (float): Scaling factor for high-pass kernels.
+        brightness_factor (float): Brightness adjustment for the low-pass kernel.
+        overlap_percentage (float): Overlap percentage between patches.
+
+    Returns:
+        numpy.ndarray: The reconstructed image.
+    """
+    # Get kernel size and patch size
+    global_properties = get_kernel_patch_sizes(input_image)
+    kernel_size = global_properties["kernel_size"]
+    patch_size = global_properties["patch_size"]
+
+    # Divide the image into patches
+    patches = divide_into_patches(input_image, overlap_percentage)
+
+    # Get the variance threshold for kernel selection
+    threshold = get_low_to_high_variance_threshold(patches)
+
+    # Dynamically select kernels for each patch
+    kernels, variance_types = dynamic_kernel_selection(
+        patches, kernel_size, threshold, high_scaling_factor, gaussian_variance, brightness_factor
+    )
+
+    # Reconstruct the image from patches
+    reconstructed_image = image_reconstruction(
+        image_shape=input_image.shape,
+        patches=patches,
+        kernels=kernels,
+        variance_types=variance_types,
+        patch_size=patch_size,
+        overlap_percentage=overlap_percentage,
+        high_scaling_factor=high_scaling_factor,
+        gaussian_variance=gaussian_variance,
+        brightness_factor=brightness_factor
+    )
+
+    return reconstructed_image
+
+def reconstruct_image(input_image, gaussian_variance, high_scaling_factor, brightness_factor, overlap_percentage):
+    """
+    Reconstruct an image using adaptive deblurring with adjustable parameters.
+
+    Args:
+        input_image (numpy.ndarray): 2D grayscale image as input.
+        gaussian_variance (float): Variance for the Gaussian blur kernel.
+        high_scaling_factor (float): Scaling factor for high-pass kernels.
+        brightness_factor (float): Brightness adjustment for the low-pass kernel.
+        overlap_percentage (float): Overlap percentage between patches.
+
+    Returns:
+        numpy.ndarray: The reconstructed image.
+    """
+    # Get kernel size and patch size
+    global_properties = get_kernel_patch_sizes(input_image)
+    kernel_size = global_properties["kernel_size"]
+    patch_size = global_properties["patch_size"]
+
+    # Divide the image into patches
+    patches = divide_into_patches(input_image, overlap_percentage)
+
+    # Get the variance threshold for kernel selection
+    threshold = get_low_to_high_variance_threshold(patches)
+
+    # Dynamically select kernels for each patch
+    kernels, variance_types = dynamic_kernel_selection(
+        patches, kernel_size, threshold, high_scaling_factor, gaussian_variance, brightness_factor
+    )
+
+    # Reconstruct the image from patches
+    reconstructed_image = image_reconstruction(
+        image_shape=input_image.shape,
+        patches=patches,
+        kernels=kernels,
+        variance_types=variance_types,
+        patch_size=patch_size,
+        overlap_percentage=overlap_percentage,
+        high_scaling_factor=high_scaling_factor,
+        gaussian_variance=gaussian_variance,
+        brightness_factor=brightness_factor
+    )
+
+    return reconstructed_image
