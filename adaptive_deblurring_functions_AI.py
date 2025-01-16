@@ -615,6 +615,39 @@ def add_noise(image, noise_type="gaussian", mean=0, var=0.01, salt_prob=0.05, pe
 
     return noisy_image
 
+def dynamic_kernel_selection_extended(patch, variance_threshold, gradient_threshold, kernels):
+    """
+    Select a kernel based on variance and gradient thresholds.
+
+    Args:
+        patch (numpy.ndarray): The image patch.
+        variance_threshold (float): Variance threshold.
+        gradient_threshold (float): Gradient magnitude threshold.
+        kernels (dict): Dictionary of available kernels.
+
+    Returns:
+        tuple: Selected kernel and kernel type.
+    """
+    _, local_variance, local_gradient = get_properties(patch)
+
+    if local_variance > variance_threshold and local_gradient > gradient_threshold:
+        kernel_type = "high_var_high_grad"
+    elif local_variance <= variance_threshold and local_gradient <= gradient_threshold:
+        kernel_type = "low_var_low_grad"
+    elif local_variance <= variance_threshold and local_gradient > gradient_threshold:
+        kernel_type = "low_var_high_grad"
+    else:  # local_variance > variance_threshold and local_gradient <= gradient_threshold
+        kernel_type = "high_var_low_grad"
+
+    return kernels[kernel_type], kernel_type
+
+import numpy as np
+from scipy.signal import convolve2d
+from sklearn.metrics import mean_squared_error
+from PIL import Image
+from scipy.ndimage import sobel
+
+# Kernel Library with Edge Scaling Factor
 def kernel_library_extended(high_scaling_factor, gaussian_variance, brightness_factor, edge_scaling_factor):
     """
     Return a dictionary of kernels for four categories:
@@ -634,7 +667,7 @@ def kernel_library_extended(high_scaling_factor, gaussian_variance, brightness_f
     return {
         "high_var_high_grad": np.array([[-1, -1, -1],
                                         [-1, 8 * high_scaling_factor, -1],
-                                        [-1, -1, -1]]),  # High-pass filter for sharp regions
+                                        [-1, -1, -1]]),  # High-pass filter
         "low_var_low_grad": brightness_factor * gaussian_kernel(3, gaussian_variance),  # Gaussian blur
         "low_var_high_grad": edge_scaling_factor * np.array([[1, -2, 1],
                                                              [-2, 5, -2],
@@ -644,111 +677,141 @@ def kernel_library_extended(high_scaling_factor, gaussian_variance, brightness_f
                                        [0, -1, 0]])  # High-frequency emphasis
     }
 
-
-def dynamic_kernel_selection_extended(patch, variance_threshold, gradient_threshold, kernels):
+# Image Loading
+def load_image(filepath, grayscale=True):
     """
-    Select a kernel based on variance and gradient thresholds.
+    Load an image and convert it to a numpy array.
     """
-    _, local_variance, local_gradient = get_properties(patch)
+    img = Image.open(filepath)
+    if grayscale:
+        img = img.convert("L")  # Convert to grayscale
+    return np.array(img)
 
-    if local_variance > variance_threshold and local_gradient > gradient_threshold:
-        kernel_type = "high_var_high_grad"
-    elif local_variance <= variance_threshold and local_gradient <= gradient_threshold:
-        kernel_type = "low_var_low_grad"
-    elif local_variance <= variance_threshold and local_gradient > gradient_threshold:
-        kernel_type = "low_var_high_grad"
-    else:  # local_variance > variance_threshold and local_gradient <= gradient_threshold
-        kernel_type = "high_var_low_grad"
+# Compute Properties of Image or Patch
+def get_properties(image):
+    """
+    Computes the properties of an image or patch: resolution, variance, and gradient magnitude.
+    """
+    height, width = image.shape
+    variance = float(np.var(image))
+    grad_x = sobel(image, axis=1)
+    grad_y = sobel(image, axis=0)
+    gradient_magnitude = np.sqrt(grad_x**2 + grad_y**2).mean()
+    return (height, width), variance, gradient_magnitude
 
-    return kernels[kernel_type], kernel_type
+# Divide Image into Patches
+def divide_into_patches(image, overlap_percentage=75):
+    """
+    Divides the input image into overlapping patches.
+    """
+    patch_size = (32, 32)  # Example fixed size
+    step_size = int((1 - overlap_percentage / 100) * patch_size[0])
+    patches = []
+    height, width = image.shape
 
+    for i in range(0, height - patch_size[0] + 1, step_size):
+        for j in range(0, width - patch_size[1] + 1, step_size):
+            patch = image[i:i + patch_size[0], j:j + patch_size[1]]
+            patches.append(patch)
+    return patches
 
-from scipy.signal import convolve2d
-import numpy as np
+# Threshold for Kernel Selection
+def get_low_to_high_variance_threshold(patches):
+    """
+    Compute the threshold to separate low and high variance patches.
+    """
+    variances = [get_properties(p)[1] for p in patches]
+    return np.percentile(variances, 75)
 
-
+# Reconstruct Image with Extended Kernel Selection
 def reconstruct_image_extended(input_image, gaussian_variance, high_scaling_factor, brightness_factor, edge_scaling_factor, overlap_percentage):
     """
-    Perform adaptive reconstruction with four kernel types.
+    Perform adaptive reconstruction with kernels based on variance and gradient.
     """
-    # Get kernel size and patch size
-    global_properties = get_kernel_patch_sizes(input_image)
-    patch_size = global_properties["patch_size"]
-
-    # Divide the image into patches
     patches = divide_into_patches(input_image, overlap_percentage)
-
-    # Get variance and gradient thresholds
     variance_threshold = get_low_to_high_variance_threshold(patches)
     gradient_threshold = np.percentile([get_properties(p)[2] for p in patches], 75)
-
-    # Fetch kernels
     kernels = kernel_library_extended(high_scaling_factor, gaussian_variance, brightness_factor, edge_scaling_factor)
 
-    # Reconstruct the image
-    reconstructed_image = image_reconstruction_extended(
-        image_shape=input_image.shape,
-        patches=patches,
-        kernels=kernels,
-        variance_threshold=variance_threshold,
-        gradient_threshold=gradient_threshold,
-        patch_size=patch_size,
-        overlap_percentage=overlap_percentage
-    )
-
-    return reconstructed_image
-
-from scipy.signal import convolve2d
-import numpy as np
-
-
-def image_reconstruction_extended(image_shape, patches, kernels, variance_threshold, gradient_threshold, patch_size, overlap_percentage):
-    """
-    Reconstruct an image using adaptive kernels for variance and gradient thresholds with overlap regularisation.
-    """
-    output_image = np.zeros(image_shape, dtype=np.float32)
-    patch_counts = np.zeros(image_shape, dtype=np.float32)
+    output_image = np.zeros_like(input_image, dtype=np.float32)
+    patch_counts = np.zeros_like(input_image, dtype=np.float32)
+    patch_size = (32, 32)
     step_size = int((1 - overlap_percentage / 100) * patch_size[0])
 
-    # To store the kernel type applied to each patch for overlap checking
-    kernel_types_map = np.empty((image_shape[0] // step_size, image_shape[1] // step_size), dtype=object)
-
     for patch_index, (patch_row, patch_col) in enumerate(
-            [(x, y) for x in range(0, image_shape[0] - patch_size[0] + 1, step_size)
-             for y in range(0, image_shape[1] - patch_size[1] + 1, step_size)]):
+            [(x, y) for x in range(0, input_image.shape[0] - patch_size[0] + 1, step_size)
+             for y in range(0, input_image.shape[1] - patch_size[1] + 1, step_size)]):
 
         patch = patches[patch_index]
-        kernel, kernel_type = dynamic_kernel_selection_extended(
-            patch, variance_threshold, gradient_threshold, kernels
-        )
-
-        # Determine the grid position of the patch
-        grid_row, grid_col = patch_row // step_size, patch_col // step_size
-
-        # Check for overlapping regions
-        if patch_index > 0:  # Skip the first patch
-            overlapping_regions = patch_counts[patch_row:patch_row + patch_size[0], patch_col:patch_col + patch_size[1]] > 0
-
-            if np.any(overlapping_regions):
-                # Determine kernel types in the overlapping region
-                neighboring_kernel_type = kernel_types_map[grid_row, grid_col]
-
-                if neighboring_kernel_type and neighboring_kernel_type != kernel_type:
-                    # If there is a conflict, regularise the kernel
-                    regularised_kernel = (kernel + kernels[neighboring_kernel_type]) / 2
-                    kernel = regularised_kernel
-
-        # Convolve the patch with its kernel
+        kernel, _ = dynamic_kernel_selection_extended(patch, variance_threshold, gradient_threshold, kernels)
         convolved_patch = convolve2d(patch, kernel, mode="same", boundary="symm")
-
-        # Accumulate the convolved patch into the output image
         output_image[patch_row:patch_row + patch_size[0], patch_col:patch_col + patch_size[1]] += convolved_patch
         patch_counts[patch_row:patch_row + patch_size[0], patch_col:patch_col + patch_size[1]] += 1
 
-        # Update kernel type map
-        kernel_types_map[grid_row, grid_col] = kernel_type
+    return np.divide(output_image, patch_counts, where=patch_counts != 0)
 
-    # Normalize overlapping regions
-    final_image = np.divide(output_image, patch_counts, where=patch_counts != 0)
-    return final_image
+# MSE Objective
+def mse_objective(params, input_image, reference_image, gaussian_variance, overlap_percentage):
+    """
+    Compute the MSE between reconstructed and reference images.
+    """
+    brightness_factor, high_scaling_factor, edge_scaling_factor = params
+    reconstructed_image = reconstruct_image_extended(
+        input_image=input_image,
+        gaussian_variance=gaussian_variance,
+        high_scaling_factor=high_scaling_factor,
+        brightness_factor=brightness_factor,
+        edge_scaling_factor=edge_scaling_factor,
+        overlap_percentage=overlap_percentage
+    )
+    return mean_squared_error(reference_image.flatten(), reconstructed_image.flatten())
 
+# Gradient Descent Optimisation
+def gradient_descent_optimisation(input_image, reference_image, gaussian_variance, overlap_percentage,
+                                  initial_guess, learning_rate=0.01, tolerance=1e-6, max_iterations=500):
+    params = np.array(initial_guess)
+    previous_mse = float("inf")
+
+    for iteration in range(max_iterations):
+        # Compute current MSE
+        current_mse = mse_objective(params, input_image, reference_image, gaussian_variance, overlap_percentage)
+
+        # Check for divergence or NaN
+        if np.isnan(current_mse) or current_mse > 1e12:
+            print(f"Warning: Divergence detected at iteration {iteration + 1}")
+            break
+
+        # Compute gradients
+        gradients = np.zeros_like(params)
+        epsilon = 1e-5
+        for i in range(len(params)):
+            params_step = params.copy()
+            params_step[i] += epsilon
+            gradients[i] = (mse_objective(params_step, input_image, reference_image, gaussian_variance, overlap_percentage)
+                            - current_mse) / epsilon
+
+        # Update parameters
+        params -= learning_rate * np.clip(gradients, -10, 10)  # Clip gradients to avoid instability
+
+        # Log progress
+        print(f"Iteration {iteration + 1}, MSE: {current_mse:.6f}, Params: {params}")
+
+        # Check for convergence
+        if abs(previous_mse - current_mse) < tolerance:
+            print("Convergence reached.")
+            return {
+                "optimised_params": params,
+                "minimum_mse": current_mse,
+                "converged": True,
+                "iterations": iteration + 1,
+            }
+
+        previous_mse = current_mse
+
+    print("Maximum iterations reached without convergence.")
+    return {
+        "optimised_params": params,
+        "minimum_mse": current_mse,
+        "converged": False,
+        "iterations": max_iterations,
+    }
